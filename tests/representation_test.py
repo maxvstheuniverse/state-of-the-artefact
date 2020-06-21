@@ -1,9 +1,9 @@
 import numpy as np
 
-from state_of_the_artefact.representation import create_ctable, vectorize
+from state_of_the_artefact.representation import create_ctable
 
 characters = ['1', '2', '3', '4', '5']
-encode, decode = create_ctable(characters)
+encode, decode, vectorize = create_ctable(characters)
 
 
 def test_encode_ctable():
@@ -24,7 +24,7 @@ def test_decode_ctable():
 
 
 def test_vectorize():
-    a = vectorize([['1', '2', '3'], ['4', '3', '2']], encode)
+    a = vectorize([['1', '2', '3'], ['4', '3', '2']])
     b = np.array([[[1, 0, 0, 0, 0],
                    [0, 1, 0, 0, 0],
                    [0, 0, 1, 0, 0]],

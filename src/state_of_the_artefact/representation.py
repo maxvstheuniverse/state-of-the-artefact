@@ -1,6 +1,7 @@
 import numpy as np
 import random
 
+
 def generate_midi_data(size, timesteps, midi_numbers=range(24, 36)):
     """ Produces a dataset of midi sequences.
 
@@ -44,9 +45,8 @@ def create_ctable(characters):
 
         return [characters[i] for i in sequence]
 
-    return encode, decode
+    def vectorize(data):
+        """ One-hot encode a dataset, using the provided encode function. """
+        return np.array([encode(sequence) for sequence in data], dtype='float32')
 
-
-def vectorize(data, encode_fn):
-    """ One-hot encode a dataset, using the provided encode function. """
-    return np.array([encode_fn(sequence) for sequence in data], dtype='float32')
+    return encode, decode, vectorize

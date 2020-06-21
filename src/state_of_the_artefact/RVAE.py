@@ -30,7 +30,7 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         self.original_dim = original_dim
 
         # -- Encoder
-        inputs = keras.layers.Input(shape=(None, original_dim,))
+        inputs = keras.layers.Input(shape=(timesteps, original_dim,))
 
         # z = RNN(100, return_sequences=True)(inputs)
         z = RNN(hidden_dim)(inputs)
