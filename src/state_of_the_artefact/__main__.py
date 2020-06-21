@@ -76,7 +76,6 @@ def run(args):
         print(f"Epoch {epoch:03d}...", end=("\r" if epoch < args.epochs - 1 else " "))
 
         # INDIVIDUAL –– learn and create
-
         new_artefacts = []
 
         for i, agent in enumerate(culture.agents):
