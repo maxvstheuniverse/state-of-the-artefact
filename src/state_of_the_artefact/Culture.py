@@ -16,7 +16,7 @@ class Culture():
         self.budget = learning_budget
         self.agents = [Agent(i, identifier) for i in range(n_agents)]
         self.repository = []
-        self.validation = []
+        self.evaluation = []
 
         self.rvae = RecurrentVariationalAutoEncoder(timesteps,
                                                     original_dim, hidden_dim, latent_dim,
@@ -69,12 +69,13 @@ class Culture():
 
             budget -= 1
 
-        loss = self.rvae.evaluate(self.seed, verbose=0)
-        self.validation.append(loss)
-
-        # TODO: Add validation on the seed.
+        # TODO: Add evaluation on the seed.
         _, _, z = self.rvae.encode(x)
         return z.numpy()
+
+    def evaluate(self):
+        loss = self.rvae.evaluate(self.seed, verbose=0)
+        self.evaluation.append(loss)
 
     def visualize(self, vectorize_fn):
         round_ids, agent_ids, culture_ids, artefacts = tuple(zip(*self.repository))
@@ -83,5 +84,5 @@ class Culture():
         mean, logvar, z = self.rvae.encode(x)
 
         cs = list(zip(round_ids, agent_ids, culture_ids, mean.numpy(), logvar.numpy(), z.numpy()))
-        validations = np.array([self.validation, *[agent.validation for agent in self.agents]])
-        return cs, validations
+        evaluations = np.array([self.evaluation, *[agent.evaluation for agent in self.agents]])
+        return cs, evaluations

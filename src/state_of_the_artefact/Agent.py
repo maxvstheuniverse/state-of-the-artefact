@@ -12,7 +12,7 @@ class Agent():
         self.id = identifier
         self.culture_id = culture_id
         self.budget = learn_budget
-        self.validation = []
+        self.evaluation = []
 
         self.rvae = RecurrentVariationalAutoEncoder(timesteps,
                                                     original_dim, hidden_dim, latent_dim,
@@ -49,12 +49,12 @@ class Agent():
 
             budget -= 1
 
-        # -- check validation
-        loss = self.rvae.evaluate(self.seed, verbose=0)
-        self.validation.append(loss)
-
         _, _, z = self.rvae.encode(x)
         return z.numpy().mean(axis=0, keepdims=True)
 
     def build(self, z):
         return self.rvae.decode(z).numpy()
+
+    def evaluate(self, seed):
+        loss = self.rvae.evaluate(seed, verbose=0)
+        self.evaluation.append(loss)

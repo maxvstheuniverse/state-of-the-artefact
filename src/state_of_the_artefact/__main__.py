@@ -83,6 +83,9 @@ def run(args):
             # perception, and find get the agents ideal (the mean)
             ideal = agent.learn(selected[i], decode)
 
+            if epoch % 10 == 0:
+                agent.evaluate(culture.seed)
+
             # build new ideal artefacts
             new_artefact = decode(agent.build(ideal)[0])
 
@@ -92,6 +95,10 @@ def run(args):
 
         # FIELD -- interact and select
         positions = culture.learn(vectorize(new_artefacts), decode)
+
+        if epoch % 10 == 0:
+            culture.evaluate()
+
         # TODO: calculate area covered, after addition of new artefacts
 
         for i, agent in enumerate(culture.agents):
