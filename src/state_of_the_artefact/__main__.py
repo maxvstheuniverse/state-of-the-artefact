@@ -98,8 +98,6 @@ def run(args):
         if epoch % 10 == 0:
             culture.evaluate()
 
-        # TODO: calculate area covered, after addition of new artefacts
-
         for i, agent in enumerate(culture.agents):
             # calcualte distances to other agents
             distances = np.linalg.norm(positions[i] - positions, axis=1)
