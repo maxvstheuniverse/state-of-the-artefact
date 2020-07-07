@@ -1,10 +1,17 @@
 import numpy as np
 
-from state_of_the_artefact.utilities import reverse_sequences
+from state_of_the_artefact.utilities import reverse_sequences, make_onehot
 
 
 def test_reverse_sequences():
-    a = reverse_sequences([['a', 'b', 'c'], ['c', 'b', 'a']])
-    b = [['c', 'b', 'a'], ['a', 'b', 'c']]
+    a = reverse_sequences([[['a', 'b', 'c'], ['c', 'b', 'a']]])
+    b = [[['c', 'b', 'a'], ['a', 'b', 'c']]]
 
     assert np.array_equal(a, b), "The sequences are not correctly reversed"
+
+
+def test_make_onehot():
+    a = make_onehot(np.array([[[1, 2, 3, 4], [1, 4, 3, 2]], [[1, 2, 3, 4], [1, 4, 3, 2]]]))
+    b = [[[0, 0, 0, 1], [0, 1, 0, 0]], [[0, 0, 0, 1], [0, 1, 0, 0]]]
+
+    assert np.array_equal(a, b), "The 3D array are not correctly onehot encoded"

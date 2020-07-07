@@ -2,22 +2,29 @@ import numpy as np
 import random
 
 
-def generate_midi_data(size, timesteps, midi_numbers=range(24, 36)):
+def generate_midi_data(size, timesteps, midi_range=range(24, 36)):
     """ Produces a dataset of midi sequences.
 
         size is the number of samples.
         timesteps is the length of each sample.
-        midi_numbers is the notes that are available
+        midi_range is the notes that are available
 
         x is a reversed sequence, and inputs for the autoencoder.
         y is the original sequence, and the target for the autoencoder.
     """
     x = []
-    characters = [str(i) for i in midi_numbers]
+    characters = [f"{pitch}" for pitch in midi_range]
+    seen = set()
 
     while len(x) < size:
         notes = [random.randint(0, len(characters) - 1) for _ in range(timesteps)]
         tune = [characters[i] for i in notes]
+
+        key = ''.join(tune)
+        if key in seen:
+            continue
+        seen.add(key)
+
         x.append(tune)
 
     return x

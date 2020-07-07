@@ -3,8 +3,10 @@ import os
 import random
 import numpy as np
 import time
+import shortid
 
-from state_of_the_artefact.Culture import Culture
+
+from state_of_the_artefact.systems import Observer
 from state_of_the_artefact.representation import generate_midi_data, create_ctable
 
 """
@@ -28,18 +30,11 @@ ____________Model Outline____________
 ____________________________________
 """
 
+BATCH_SIZE = 32
+TIMESTEPS = 10
+MIDI_RANGE = range(24, 36)
 
-# def init(args):
-#     """ Initializes the levels and seeds the individuals. """
-
-#     characters = [str(c) for c in range(24, 36)]
-#     encode, decode = create_ctable(characters)
-#     seed = vectorize(generate_midi_data(10000, 10, midi_numbers=range(24, 36)), encode)
-
-#     observer = Observer()
-#     cultures = [Culture(i, seed) for i in range(args.num_cultures)]
-
-#     return observer, cultures
+sid = shortid.ShortId()
 
 
 def run(args):
@@ -47,81 +42,127 @@ def run(args):
     t = time.strftime('%Y-%m-%dT%H-%M-%S', time.localtime())
 
     # setup the representation
-    characters = [str(c) for c in range(24, 36)]
+    characters = [f"{pitch}" for pitch in MIDI_RANGE]
     encode, decode, vectorize = create_ctable(characters)
 
-    seed_path = os.path.join(os.getcwd(), "data", "seeds", "seed.npy")
+    seed_paths = [os.path.join(os.getcwd(), "data", "seeds", f"seed_{n}.npy") for n in range(args.n_cultures)]
+    seeds = []
 
-    if os.path.exists(seed_path):
-        print("Loading seed...", end=" ")
-        seed = np.load(seed_path)
-        print("Done.")
-    else:
-        print('Generating seed...', end=" ")
-        seed = vectorize(generate_midi_data(50000, 10, midi_numbers=range(24, 36)))
-        print("Saving.", end=" ")
-        np.save(seed_path, seed)
-        print("Done.")
+    for seed_path in seed_paths:
+        if os.path.exists(seed_path):
+            print("Loading seed...", end=" ")
+            seeds.append(np.load(seed_path))
+            print("Done.")
+        else:
+            print('Generating seed...', end=" ")
+            seed = vectorize(generate_midi_data(1500 * BATCH_SIZE, TIMESTEPS, midi_range=MIDI_RANGE))
+            seeds.append(seed)
+            print("Saving.", end=" ")
+            np.save(seed_path, seed)
+            print("Done.")
 
     # setup the systems
-    # observer = Observer()
-    culture = Culture(0, seed, args.n_agents)
+    observer = Observer(args.n_cultures, args.n_agents, args.n_artefacts, seeds)
+    # culture = Culture(0, seed, args.n_agents)
 
     # setup the loop
-    selected = np.array([random.choices(seed, k=args.n_artefacts) for _ in range(args.n_agents)])
-
     print('-' * 80)
+
+    evaluations = []
+    reconstructions = []
+    agent_interactions = []
+
     # -- run the loop
     for epoch in range(args.epochs):
         print(f"Epoch {epoch:03d}...", end=("\r" if epoch < args.epochs - 1 else " "))
 
-        # INDIVIDUAL –– learn and create
-        new_artefacts = []
+        evaluation = []
+        # -- CULTURES
+        for i, culture in enumerate(observer.cultures):
 
-        for i, agent in enumerate(culture.agents):
-            # perception, and find get the agents ideal (the mean)
-            ideal = agent.learn(selected[i], decode)
+            # INDIVIDUAL –– learn and create
+            new_artefacts = []
 
+            for j, agent in enumerate(culture.agents):
+                # start the agent off with a basic pool of "seen" artefacts
+                if epoch == 0:
+                    starters = np.array(random.choices(culture.seed, k=args.n_artefacts))  # take some of the training examples
+                    z_means, _, _ = agent.encode(starters)
+
+                    for artefact, z_mean in zip(starters, z_means):
+                        entry = [-1, agent.id, culture.id, sid.generate(), artefact, z_mean]
+                        culture.store(entry)
+                        agent.store(entry)
+
+                # perception, and find get the agents ideal (the mean of z)
+                ideal = agent.learn(culture.selected[j], apply_mean=True)
+
+                # every 10 epochs evaluate
+                if epoch % 10 == 0:
+                    evaluation.append(agent.evaluate(culture.val_seed))
+                    # reconstruction.append(agent.reconstruct())
+
+                # build new ideal artefacts
+                new_artefact, z_mean = agent.build(ideal)
+
+                # create a repository entry
+                # entry = {"epoch": epoch,
+                #          "agent_id": agent.id,
+                #          "culture_id": culture.id,
+                #          "artefact_id": sid.generate(),
+                #          "artefact": new_artefact}
+
+                entry = [epoch, agent.id, culture.id, sid.generate(), new_artefact[0], z_mean]
+
+                # observer.store(entry)
+                culture.store(entry)
+                agent.store(entry)
+
+                # and prepare culture for adapting to new artefacts
+                new_artefacts.append(new_artefact[0])
+
+            # FIELD -- interact and select
+            positions = culture.learn(np.array(new_artefacts), apply_mean=False)
+
+            # every 10 epochs evaluate
             if epoch % 10 == 0:
-                agent.evaluate(culture.seed)
+                evaluation.append(culture.evaluate(culture.val_seed))
+                reconstructions.append(culture.reconstruct())
 
-            # build new ideal artefacts
-            new_artefact = decode(agent.build(ideal)[0])
+            for j, agent in enumerate(culture.agents):
+                # calculate distances to other agents
+                distances = np.linalg.norm(positions[j] - positions, axis=1)
 
-            # add to culture, and save ideals for culture to learn the agent's positions
-            culture.add(epoch, agent.id, culture.id, new_artefact)
-            new_artefacts.append(new_artefact)
+                # get neighbours, sort, return indices, skip first as this is the current agent.
+                neighbours = np.argsort(distances)[1:args.n_neighbours + 1]
+                agent_interactions.append([epoch, agent.id, neighbours])
 
-        # FIELD -- interact and select
-        positions = culture.learn(vectorize(new_artefacts), decode)
+                # gather artefacts created by the field
+                # first the artefact by the current agent
+                possible_artefacts = culture.select(agent.id)
 
-        if epoch % 10 == 0:
-            culture.evaluate()
+                # then append the neighbours
+                for neighbour in neighbours:
+                    possible_artefacts += culture.select(neighbour)
 
-        for i, agent in enumerate(culture.agents):
-            # calcualte distances to other agents
-            distances = np.linalg.norm(positions[i] - positions, axis=1)
+                # TODO: draw from a gaussian distribution or FRECENCY
+                # TODO: with every round reweight artefacts, new ones are more likely?
+                # TODO: use a novelty measure for selecting artefacts, the most novel ones have the highst prob?
+                culture.selected[j] = np.array(random.choices(possible_artefacts, k=args.n_artefacts))
 
-            # get neighbours, sort, return indices, skip first as this is the current agent.
-            neighbours = np.argsort(distances)[1:args.n_neighbours + 1]
-
-            # gather artefacts created by the field
-            possible_artefacts = culture.select(agent.id)
-
-            for neighbour in neighbours:
-                possible_artefacts += culture.select(neighbour)
-
-            # TODO: draw from a gaussian distribution
-            # TODO: with every round reweight artefacts, new ones are more likely?=
-            selected[i] = vectorize(random.choices(possible_artefacts, k=args.n_artefacts))
+        evaluations.append(evaluation)
 
     print("Done.")
     print(f"Time Elapsed: {time.time() - start_time:0.3f}s")
 
-    data, validation = culture.visualize(vectorize)
-    data_path = os.path.join(os.getcwd(), "data", "output", f"output_{t}")
-    np.save(data_path, np.array(data))
-    np.save(data_path + "_validation", validation)
+    # -- still dealing with a single culture
+    data = observer.cultures[0].export()
+    data_path = os.path.join(os.getcwd(), "data", "output", f"test_output_{t}")
+
+    np.save(data_path + ".npy", data)
+    np.save(data_path + "_evaluations.npy", np.array(evaluations))
+    np.save(data_path + "_reconstructions.npy", np.array(reconstructions))
+    np.save(data_path + "_interactions.npy", np.array(agent_interactions))
 
 
 def main(args=None):

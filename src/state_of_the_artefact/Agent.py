@@ -14,22 +14,23 @@ class Agent():
         self.budget = learn_budget
         self.evaluation = []
 
-        self.rvae = RecurrentVariationalAutoEncoder(timesteps,
-                                                    original_dim, hidden_dim, latent_dim,
-                                                    RNN=tf.keras.layers.LSTM)
-        self.rvae.compile(optimizer=tf.keras.optimizers.Adam(1e-3), loss="categorical_crossentropy")
+        self.cs = RecurrentVariationalAutoEncoder(timesteps,
+                                                  original_dim, hidden_dim, latent_dim,
+                                                  RNN=tf.keras.layers.LSTM)
+        self.cs.compile(optimizer="adam",
+                        loss="categorical_crossentropy")
 
-    def fit(self, artefacts, epochs=50, **kwargs):
+    def fit(self, artefacts, epochs=25, **kwargs):
         """ School the agent, by presenting artefacts that are the starting point of the culture. """
         model_path = os.path.join(os.getcwd(), "data", "models", f"agent_{self.culture_id}_{self.id}.h5")
 
         if os.path.exists(model_path):
             print(f"Loading weights for agent_{self.culture_id}_{self.id}...", end=" ")
-            self.rvae.load_weights(model_path)
+            self.cs.load_weights(model_path)
             print(f"Done.")
         else:
-            self.rvae.fit(reverse_sequences(artefacts), artefacts, epochs=epochs, **kwargs)
-            self.rvae.save_weights(model_path)
+            self.cs.fit(reverse_sequences(artefacts), artefacts, epochs=epochs, **kwargs)
+            self.cs.save_weights(model_path)
 
     def learn(self, artefacts, decode_fn):
         """ Trains the individual to understand the presented artefacts """
@@ -39,9 +40,9 @@ class Agent():
         missclassifieds = 1
         while missclassifieds > 0 and budget > 0:
             missclassifieds = 0
-            history = self.rvae.fit(x, artefacts, epochs=1, verbose=0)
+            history = self.cs.fit(x, artefacts, epochs=1, batch_size=1, verbose=0)
 
-            reconstructions = self.rvae.predict(x)
+            reconstructions = self.cs.predict(x)
 
             for original, reconstruction in zip(artefacts, reconstructions):
                 if not np.array_equiv(decode_fn(original), decode_fn(reconstruction)):
@@ -49,12 +50,12 @@ class Agent():
 
             budget -= 1
 
-        _, _, z = self.rvae.encode(x)
+        _, _, z = self.cs.encode(x)
         return z.numpy().mean(axis=0, keepdims=True)
 
     def build(self, z):
-        return self.rvae.decode(z).numpy()
+        return self.cs.decode(z).numpy()
 
     def evaluate(self, seed):
-        loss = self.rvae.evaluate(seed, verbose=0)
-        self.evaluation.append(loss)
+        losses = self.cs.evaluate(seed, verbose=0)
+        self.evaluation.append(np.array(losses))
