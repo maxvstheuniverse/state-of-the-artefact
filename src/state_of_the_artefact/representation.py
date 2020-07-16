@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 
-def generate_midi_data(size, timesteps, midi_range=range(24, 36)):
+def generate_midi_data(size, timesteps, midi_range=range(24, 36), probablities=None):
     """ Produces a dataset of midi sequences.
 
         size is the number of samples.
@@ -17,8 +17,7 @@ def generate_midi_data(size, timesteps, midi_range=range(24, 36)):
     seen = set()
 
     while len(x) < size:
-        notes = [random.randint(0, len(characters) - 1) for _ in range(timesteps)]
-        tune = [characters[i] for i in notes]
+        tune = np.random.choice(characters, size=timesteps, p=probablities)
 
         key = ''.join(tune)
         if key in seen:

@@ -31,7 +31,7 @@ ____________________________________
 """
 
 BATCH_SIZE = 32
-TIMESTEPS = 10
+TIMESTEPS = 16
 MIDI_RANGE = range(24, 36)
 
 sid = shortid.ShortId()
@@ -63,13 +63,12 @@ def run(args):
 
     # setup the systems
     observer = Observer(args.n_cultures, args.n_agents, args.n_artefacts, seeds)
-    # culture = Culture(0, seed, args.n_agents)
 
     # setup the loop
     print('-' * 80)
 
     evaluations = []
-    reconstructions = []
+    reconstructions = {'cultures': [], 'agents': []}
     agent_interactions = []
 
     # -- run the loop
@@ -77,6 +76,7 @@ def run(args):
         print(f"Epoch {epoch:03d}...", end=("\r" if epoch < args.epochs - 1 else " "))
 
         evaluation = []
+
         # -- CULTURES
         for i, culture in enumerate(observer.cultures):
 
@@ -86,7 +86,8 @@ def run(args):
             for j, agent in enumerate(culture.agents):
                 # start the agent off with a basic pool of "seen" artefacts
                 if epoch == 0:
-                    starters = np.array(random.choices(culture.seed, k=args.n_artefacts))  # take some of the training examples
+                    # take some of the training examples to seed the repositories
+                    starters = culture.selected[j]
                     z_means, _, _ = agent.encode(starters)
 
                     for artefact, z_mean in zip(starters, z_means):
@@ -98,36 +99,29 @@ def run(args):
                 ideal = agent.learn(culture.selected[j], apply_mean=True)
 
                 # every 10 epochs evaluate
-                if epoch % 10 == 0:
-                    evaluation.append(agent.evaluate(culture.val_seed))
-                    # reconstruction.append(agent.reconstruct())
+                if epoch % 5 == 0 or epoch == args.epochs - 1:
+                    evaluation.append(agent.evaluate(culture.seed))
+                    reconstructions['agents'].append(agent.reconstruct())
 
                 # build new ideal artefacts
                 new_artefact, z_mean = agent.build(ideal)
 
-                # create a repository entry
-                # entry = {"epoch": epoch,
-                #          "agent_id": agent.id,
-                #          "culture_id": culture.id,
-                #          "artefact_id": sid.generate(),
-                #          "artefact": new_artefact}
-
                 entry = [epoch, agent.id, culture.id, sid.generate(), new_artefact[0], z_mean]
 
-                # observer.store(entry)
+                observer.store(entry)
                 culture.store(entry)
                 agent.store(entry)
 
                 # and prepare culture for adapting to new artefacts
-                new_artefacts.append(new_artefact[0])
+                new_artefacts += list(new_artefact)
 
             # FIELD -- interact and select
             positions = culture.learn(np.array(new_artefacts), apply_mean=False)
 
             # every 10 epochs evaluate
-            if epoch % 10 == 0:
-                evaluation.append(culture.evaluate(culture.val_seed))
-                reconstructions.append(culture.reconstruct())
+            if epoch % 5 == 0 or epoch == args.epochs - 1:
+                evaluation.append(culture.evaluate(culture.seed))
+                reconstructions['cultures'].append(culture.reconstruct())
 
             for j, agent in enumerate(culture.agents):
                 # calculate distances to other agents

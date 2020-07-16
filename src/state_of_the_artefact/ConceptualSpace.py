@@ -3,20 +3,24 @@ import numpy as np
 import os
 import pandas as pd
 
-from state_of_the_artefact.RVAE_ import RecurrentVariationalAutoEncoder
+from state_of_the_artefact.RVAE import RecurrentVariationalAutoEncoder
 from state_of_the_artefact.utilities import reverse_sequences
 
 
 class ConceptualSpace():
     def __init__(self, timesteps, dimensions):
-        self.rvae = RecurrentVariationalAutoEncoder(timesteps,
-                                                    dimensions[0], dimensions[1], dimensions[2])
-        self.rvae.compile(optimizer='adam', loss='categorical_crossentropy')
+        original_dim, hidden_dim, latent_dim = dimensions
 
-        self.budget = 200
+        self.rvae = RecurrentVariationalAutoEncoder(timesteps,
+                                                    original_dim,
+                                                    hidden_dim,
+                                                    latent_dim)
+        self.rvae.compile(optimizer='adam')
+
+        self.budget = 100
         self.repository = []
 
-    def fit(self, seed, epochs=25, **kwargs):
+    def fit(self, seed, epochs=250, annealing_epochs=15, **kwargs):
         """ Initialize conceptual space with starting seed. """
         model_path = os.path.join(os.getcwd(), "data", "models", f"{self.name}.h5")
 
@@ -25,14 +29,19 @@ class ConceptualSpace():
             self.rvae.load_weights(model_path)
             print("Done.")
         else:
-            self.rvae.fit(reverse_sequences(seed), seed, epochs=epochs, **kwargs)
+            self.rvae.fit(reverse_sequences(seed), seed,
+                          epochs=epochs, callbacks=[KLAnnealing(annealing_epochs)],
+                          **kwargs)
             self.rvae.save_weights(model_path)
             print("Done.")
 
     def learn(self, artefacts, apply_mean=True):
         """ Trains the individual to understand the presented artefacts.
 
-            Returns the mean of those prestented artefacts.
+            If `apply_mean` is `True` it returns the interpolated latent variables of the
+            presented artefacts.
+
+            Otherwise, it returns the sampled latent variables of each artefact  .
         """
         budget = self.budget
         num_artefacts = len(artefacts)
@@ -57,7 +66,6 @@ class ConceptualSpace():
 
         z_mean, z_logvar, z = self.rvae.encode(x)
 
-        # NOTE: do I take the z or the z_mean variables?
         if apply_mean:
             return z.numpy().mean(axis=0, keepdims=True)
         else:
@@ -70,10 +78,10 @@ class ConceptualSpace():
     def store(self, entry):
         self.repository.append(entry)
 
-    def evaluate(self, val_seed):
+    def evaluate(self, seed):
         """ Evaluate the current state of the conceptual space against a validation seed. """
         # TODO: optimization reverse sequences at initialization
-        evaluation = self.rvae.evaluate(reverse_sequences(val_seed), val_seed, verbose=0)
+        evaluation = self.rvae.evaluate(reverse_sequences(seed), seed, verbose=0)
         return evaluation
 
     def reconstruct(self):
@@ -85,7 +93,6 @@ class ConceptualSpace():
 
     def export(self):
         epochs, agent_ids, culture_ids, artefact_id, artefacts, o_z_mean = list(zip(*self.repository))
-
         z_mean, z_logvar, z = self.encode(artefacts)
 
         data = list(zip(epochs, agent_ids, culture_ids, artefact_id, artefacts,

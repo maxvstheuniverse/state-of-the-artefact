@@ -4,7 +4,7 @@ import random
 from state_of_the_artefact.ConceptualSpace import ConceptualSpace
 from state_of_the_artefact.utilities import make_onehot
 
-TIMESTEPS = 10
+TIMESTEPS = 16
 DIMENSIONS = (12, 128, 32)  # input, hidden, latent
 BATCH_SIZE = 32
 
@@ -30,12 +30,10 @@ class Culture(ConceptualSpace):
         self.name = f"culture_{culture_id}"
         self.id = culture_id
 
-        split_at = len(seed) - len(seed) // 10
-        self.seed = seed[:split_at]
-        self.val_seed = seed[split_at:]
+        self.seed = seed
 
         self.agents = [Agent(i, culture_id) for i in range(n_agents)]
-        self.selected = [np.array(random.choices(self.val_seed, k=n_artefacts)) for _ in range(n_agents)]
+        self.selected = [np.array(random.choices(self.seed, k=n_artefacts)) for _ in range(n_agents)]
 
         for agent in self.agents:
             agent.fit(self.seed, batch_size=BATCH_SIZE)
