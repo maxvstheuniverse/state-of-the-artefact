@@ -32,6 +32,7 @@ class Culture(ConceptualSpace):
 
         self.seed = seed
 
+        # TODO: Use unique seed for every agent?
         self.agents = [Agent(i, culture_id) for i in range(n_agents)]
         self.selected = [np.array(random.choices(self.seed, k=n_artefacts)) for _ in range(n_agents)]
 

@@ -45,7 +45,7 @@ def run(args):
     characters = [f"{pitch}" for pitch in MIDI_RANGE]
     encode, decode, vectorize = create_ctable(characters)
 
-    seed_paths = [os.path.join(os.getcwd(), "data", "seeds", f"seed_{n}.npy") for n in range(args.n_cultures)]
+    seed_paths = [os.path.join(os.getcwd(), "data", "seeds", f"culture_{n}.npy") for n in range(args.n_cultures)]
     seeds = []
 
     for seed_path in seed_paths:
