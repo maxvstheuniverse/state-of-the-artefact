@@ -43,3 +43,15 @@ def generate_integer_probabilities(minv, maxv, loc, scale):
 
     prob = ss.norm.cdf(xUb, loc=loc, scale=scale) - ss.norm.cdf(xLb, loc=loc, scale=scale)
     return prob / prob.sum()  # return normalized probablities
+
+
+def reward(x, scale=1, offset=5):
+    return scale * (1 / (1 + np.exp(-15 * x + offset)))
+
+
+def punish(x, scale=1.1, offset=10):
+    return -scale * (1 / (1 + np.exp(-15 * x + offset)))
+
+
+def hedonic(x):
+    return reward(x) + punish(x)

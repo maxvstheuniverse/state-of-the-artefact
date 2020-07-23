@@ -96,7 +96,7 @@ def run(args):
                         agent.store(entry)
 
                 # perception, and find get the agents ideal (the mean of z)
-                ideal = agent.learn(culture.selected[j], apply_mean=True)
+                ideal = agent.learn(culture.selected[j], apply_mean=True, from_sample=True)
 
                 # every 10 epochs evaluate
                 if epoch % 5 == 0 or epoch == args.epochs - 1:
@@ -151,7 +151,7 @@ def run(args):
 
     # -- still dealing with a single culture
     data = observer.cultures[0].export()
-    data_path = os.path.join(os.getcwd(), "data", "output", f"test_output_{t}")
+    data_path = os.path.join(os.getcwd(), "data", "output", f"500_output_{t}")
 
     np.save(data_path + ".npy", data)
     np.save(data_path + "_evaluations.npy", np.array(evaluations))

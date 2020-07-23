@@ -22,7 +22,7 @@ class ConceptualSpace():
 
     def fit(self, seed, epochs=250, annealing_epochs=15, **kwargs):
         """ Initialize conceptual space with starting seed. """
-        model_path = os.path.join(os.getcwd(), "data", "models", f"{self.name}.h5")
+        model_path = os.path.join(os.getcwd(), "data", "models", f"{self.name}_500.h5")
 
         if os.path.exists(model_path):
             print(f"Loading weights for {self.name}...", end=" ")
@@ -35,11 +35,15 @@ class ConceptualSpace():
             self.rvae.save_weights(model_path)
             print("Done.")
 
-    def learn(self, artefacts, apply_mean=True):
+    def learn(self, artefacts, apply_mean=True, from_sample=True):
         """ Trains the individual to understand the presented artefacts.
 
             If `apply_mean` is `True` it returns the interpolated latent variables of the
             presented artefacts.
+
+            If `from_sample` is `True` it returns an interpolated latent variable sampled
+            from a normal distrubution with the mean and variance of the latent variables
+            of the learned artefacts.
 
             Otherwise, it returns the sampled latent variables of each artefact  .
         """
@@ -65,11 +69,18 @@ class ConceptualSpace():
             budget -= 1
 
         z_mean, z_logvar, z = self.rvae.encode(x)
+        z = z.numpy()
 
         if apply_mean:
-            return z.numpy().mean(axis=0, keepdims=True)
+            mu = z.mean(axis=0, keepdims=True)
+
+            if from_sample:
+                sigma = z.var(axis=0, keepdims=True)
+                return np.random.normal(mu, sigma, (1, 32))
+            else:
+                return mu
         else:
-            return z.numpy()
+            return z
 
     def encode(self, artefacts):
         x = reverse_sequences(artefacts)
