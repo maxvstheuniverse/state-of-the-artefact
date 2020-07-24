@@ -96,7 +96,7 @@ def run(args):
                         agent.store(entry)
 
                 # perception, and find get the agents ideal (the mean of z)
-                ideal = agent.learn(culture.selected[j], apply_mean=True, from_sample=True)
+                ideal = agent.learn(culture.selected[j], apply_mean=True, from_sample=args.from_sample)
 
                 # every 10 epochs evaluate
                 if epoch % 5 == 0 or epoch == args.epochs - 1:
@@ -171,10 +171,16 @@ def main(args=None):
     parser.add_argument("-n", "--neighbours", type=int, default=2, dest="n_neighbours",
                         help="The number of agents selected to be the field. Default: 2")
 
-    parser.add_argument("-i", "--init-epochs", type=int, default=50, dest="init_epochs",
+    parser.add_argument("-i", "--init-epochs", type=int, default=500, dest="init_epochs",
                         help="The number of epochs used for schooling the individuals. Default: 50")
     parser.add_argument("-s", "--artefacts", type=int, default=10, dest="n_artefacts",
                         help="The number of item selected each round. Default: 10")
+
+    parser.add_argument("--from_sample", type=bool, default=False, dest="from_sample",
+                        help="If `True` the agent returns a sampled position. \
+                              When `False` it returns the mean.")
+
+    pars
     args = parser.parse_args()
 
     # launch simulation
