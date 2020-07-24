@@ -22,7 +22,7 @@ class ConceptualSpace():
 
     def fit(self, seed, epochs=250, annealing_epochs=15, **kwargs):
         """ Initialize conceptual space with starting seed. """
-        model_path = os.path.join(os.getcwd(), "data", "models", f"{self.name}_500.h5")
+        model_path = os.path.join(os.getcwd(), "data", "models", f"{self.name}_1000.h5")
 
         if os.path.exists(model_path):
             print(f"Loading weights for {self.name}...", end=" ")

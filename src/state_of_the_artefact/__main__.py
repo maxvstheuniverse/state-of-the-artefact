@@ -96,7 +96,7 @@ def run(args):
                         agent.store(entry)
 
                 # perception, and find get the agents ideal (the mean of z)
-                ideal = agent.learn(culture.selected[j], apply_mean=True, from_sample=True)
+                ideal = agent.learn(culture.selected[j], apply_mean=True, from_sample=False)
 
                 # every 10 epochs evaluate
                 if epoch % 5 == 0 or epoch == args.epochs - 1:
