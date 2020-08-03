@@ -21,7 +21,7 @@ class ConceptualSpace():
         self.budget = 100
         self.repository = []
 
-    def fit(self, seed, epochs=250, annealing_epochs=10, model_path=None, **kwargs):
+    def fit(self, seed, epochs=500, annealing_epochs=15, model_path=None, **kwargs):
         """ Initialize conceptual space with starting seed. """
         if model_path is None:
             model_path = os.path.join(os.getcwd(), "data", "models")

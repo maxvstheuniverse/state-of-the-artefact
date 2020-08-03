@@ -77,9 +77,9 @@ class Recommender(ConceptualSpace):
         for entry, z_mean, z_logvar, z in zip(entries, z_means, z_logvars, zs):
             # append extra domain information
             domain_entry = {**entry,
-                            "domain_z_mean": z_mean,
-                            "domain_z_logvar": z_logvar,
-                            "domain_z": z}
+                            "domain_z_mean": z_mean.numpy(),
+                            "domain_z_logvar": z_logvar.numpy(),
+                            "domain_z": z.numpy()}
 
             # store entry
             self.repository.append(domain_entry)
@@ -124,7 +124,7 @@ class Agent(ConceptualSpace):
         self.seed = seed
         self.seed_reversed = reverse_sequences(seed)
 
-        self.fit(self.seed, epochs=50, batch_size=BATCH_SIZE)
+        self.fit(self.seed, batch_size=BATCH_SIZE)
 
     def select(self):
         # NOTE: Do I want to keep track of every artefact selected?
