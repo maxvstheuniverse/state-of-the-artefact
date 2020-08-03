@@ -12,7 +12,8 @@ setup(
     install_requires=[],
     entry_points={
         "console_scripts": [
-            "run=state_of_the_artefact.__main__:main"
+            "run=state_of_the_artefact.__main__:main",
+            "two_agents=state_of_the_artefact.__main__:two_agents"
         ]
     }
 )

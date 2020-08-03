@@ -5,6 +5,7 @@ import pandas as pd
 
 from state_of_the_artefact.RVAE import RecurrentVariationalAutoEncoder
 from state_of_the_artefact.utilities import reverse_sequences
+from state_of_the_artefact.callbacks import KLAnnealing
 
 
 class ConceptualSpace():
@@ -20,9 +21,13 @@ class ConceptualSpace():
         self.budget = 100
         self.repository = []
 
-    def fit(self, seed, epochs=250, annealing_epochs=15, **kwargs):
+    def fit(self, seed, epochs=250, annealing_epochs=10, model_path=None, **kwargs):
         """ Initialize conceptual space with starting seed. """
-        model_path = os.path.join(os.getcwd(), "data", "models", f"{self.name}_500.h5")
+        if model_path is None:
+            model_path = os.path.join(os.getcwd(), "data", "models")
+
+        # append model name
+        model_path = os.path.join(model_path, f"{self.name}_{epochs}.h5")
 
         if os.path.exists(model_path):
             print(f"Loading weights for {self.name}...", end=" ")
@@ -35,7 +40,7 @@ class ConceptualSpace():
             self.rvae.save_weights(model_path)
             print("Done.")
 
-    def learn(self, artefacts, apply_mean=True, from_sample=True):
+    def learn(self, artefacts, apply_mean=True, from_sample=False):
         """ Trains the individual to understand the presented artefacts.
 
             If `apply_mean` is `True` it returns the interpolated latent variables of the
@@ -89,10 +94,37 @@ class ConceptualSpace():
     def store(self, entry):
         self.repository.append(entry)
 
-    def evaluate(self, seed):
-        """ Evaluate the current state of the conceptual space against a validation seed. """
+    def evaluate(self, data):
+        """ Evaluate the current state of the conceptual space against a validation seed.
+
+            Returns a dict of metrics:
+                vae_loss,
+                reconstruction_loss,
+                kl_loss,
+                kl_annealed,
+                accuracy,
+                ts_accuracy
+        """
         # TODO: optimization reverse sequences at initialization
-        evaluation = self.rvae.evaluate(reverse_sequences(seed), seed, verbose=0)
+        x = reverse_sequences(seed)
+        evaluation = self.rvae.evaluate(x, seed, verbose=0, return_dict=True)
+
+        _, _, z = self.rvae.encode(x)
+        reconstructions = self.rvae.decode(z)
+
+        correct = 0
+        ts_correct = 0
+        for original, reconstruction in zip(x, reconstructions):
+            a = np.argmax(original, axis=1)
+            b = np.argmax(reconstruction, axis=1)
+
+            if np.array_equiv(a, b):
+                correct += 1
+
+            ts_correct += np.sum([0 if x == y else 1 for x, y in zip(a, b)]) / TIMESTEPS
+
+        evaluation["accuracy"] = correct / len(x)
+        evaluation["ts_accuracy"] = ts_correct / len(x)
         return evaluation
 
     def reconstruct(self):
@@ -100,7 +132,8 @@ class ConceptualSpace():
         _, _, _, artefact_ids, artefacts, o_z_mean = list(zip(*self.repository))
 
         z_mean, z_logvar, z = self.encode(np.array(artefacts))
-        return np.array([*zip(artefact_ids, o_z_mean, z_mean, z_logvar, z)])
+        x_hat = self.rvae.decode(z).numpy()
+        return np.array([*zip(artefact_ids, o_z_mean, z_mean, z_logvar, z, artefacts, x_hat)])
 
     def export(self):
         epochs, agent_ids, culture_ids, artefact_id, artefacts, o_z_mean = list(zip(*self.repository))
