@@ -13,8 +13,47 @@ def generate_midi_data(size, timesteps, midi_range=range(24, 36), probablities=N
         y is the original sequence, and the target for the autoencoder.
     """
     x = []
+    seen = set()
+
+    characters = [f"{pitch}" for pitch in midi_range]
+    _, _, vectorize = create_ctable(characters)
+
+    while len(x) < size:
+        tune = np.random.choice(characters, size=timesteps, p=probablities)
+
+        key = ''.join(tune)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        x.append(tune)
+
+    return vectorize(x)
+
+
+def generate_midi_data_tonic(size, timesteps, key="C", midi_range=range(24, 36), probablities=None):
+    x = []
     characters = [f"{pitch}" for pitch in midi_range]
     seen = set()
+
+    # C C# D D# E F F# G G# A A# B
+
+    # diatonic
+    # C: 1 0 1 0 1 1 0 1 0 1 0 1
+    # F: T T T S T T S
+
+    # pentatonic
+    # C: 1 0 1 0 1 0 0 1 0 1 0 0
+    # F: 1 0 1 0 0 1 0 1 0 1 0 0
+
+    if key == "C":
+        probablities = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]) / 7
+
+    if key == "C#":
+        probablities = np.array([0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1]) / 7
+
+    if key == "F":
+        probablities = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0]) / 7
 
     while len(x) < size:
         tune = np.random.choice(characters, size=timesteps, p=probablities)

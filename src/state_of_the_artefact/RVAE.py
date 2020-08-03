@@ -1,4 +1,6 @@
 import tensorflow as tf
+from tensorflow.keras import Model, layers, metrics
+from state_of_the_artefact.utilities import make_onehot
 
 
 def sampling(args):
@@ -32,35 +34,35 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
 
-        self.vae_loss = tf.keras.metrics.Mean(name="vae_loss")
-        self.kl_loss = tf.keras.metrics.Mean(name="kl_loss")
-        self.kl_loss_weighted = tf.keras.metrics.Mean(name="kl_loss_weighted")
-        self.reconstruction_loss = tf.keras.metrics.Mean(name="reconstruction_loss")
+        self.vae_loss = metrics.Mean(name="vae_loss")
+        self.reconstruction_loss = metrics.Mean(name="reconstruction_loss")
+        self.kl_loss = metrics.Mean(name="kl_loss")
+        self.kl_annealed = metrics.Mean(name="kl_annealed")
 
         self.kl_weight = tf.Variable(beta, trainable=False)
 
         # -- Encoder
-        inputs = tf.keras.layers.Input(shape=(timesteps, original_dim,))
+        inputs = layers.Input(shape=(timesteps, original_dim,))
 
-        h_encoder = tf.keras.layers.LSTM(hidden_dim, return_sequences=True)(inputs)
-        h_encoder = tf.keras.layers.LSTM(hidden_dim)(h_encoder)
+        h_encoder = layers.LSTM(hidden_dim, return_sequences=True)(inputs)
+        h_encoder = layers.LSTM(hidden_dim)(h_encoder)
 
-        z_mean = tf.keras.layers.Dense(latent_dim, activation="linear")(h_encoder)
-        z_logvar = tf.keras.layers.Dense(latent_dim, activation="linear")(h_encoder)
-        z = tf.keras.layers.Lambda(sampling)([z_mean, z_logvar])
+        z_mean = layers.Dense(latent_dim, activation="linear")(h_encoder)
+        z_logvar = layers.Dense(latent_dim, activation="linear")(h_encoder)
+        z = layers.Lambda(sampling)([z_mean, z_logvar])
 
-        self.encoder = tf.keras.Model(inputs=[inputs], outputs=[z_mean, z_logvar, z], name="Encoder")
+        self.encoder = Model(inputs=[inputs], outputs=[z_mean, z_logvar, z], name="Encoder")
 
         # -- Decoder
-        z_inputs = tf.keras.layers.Input(shape=(latent_dim,))
+        z_inputs = layers.Input(shape=(latent_dim,))
 
-        h_decoder = tf.keras.layers.RepeatVector(timesteps)(z_inputs)
-        h_decoder = tf.keras.layers.LSTM(hidden_dim, return_sequences=True)(h_decoder)
-        h_decoder = tf.keras.layers.LSTM(hidden_dim, return_sequences=True)(h_decoder)
+        h_decoder = layers.RepeatVector(timesteps)(z_inputs)
+        h_decoder = layers.LSTM(hidden_dim, return_sequences=True)(h_decoder)
+        h_decoder = layers.LSTM(hidden_dim, return_sequences=True)(h_decoder)
 
-        outputs = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(original_dim))(h_decoder)
+        outputs = layers.TimeDistributed(layers.Dense(original_dim))(h_decoder)
 
-        self.decoder = tf.keras.Model(inputs=[z_inputs], outputs=[outputs], name="Decoder")
+        self.decoder = Model(inputs=[z_inputs], outputs=[outputs], name="Decoder")
 
     @tf.function
     def train_step(self, x, y=None):
@@ -74,18 +76,21 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
 
             CE = reconstruction_loss(x_logits, y)
             KL = kl_loss(z_mean, z_logvar)
-            vae_loss = CE + KL
+
+            vae_loss = CE + self.kl_weight * KL
 
         gradients = tape.gradient(vae_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_weights))
 
         self.reconstruction_loss.update_state(CE)
         self.kl_loss.update_state(KL)
+        self.kl_annealed.update_state(self.kl_weight * KL)
         self.vae_loss.update_state(vae_loss)
 
         return {"vae_loss": self.vae_loss.result(),
                 "reconstruction_loss": self.reconstruction_loss.result(),
-                "kl_loss": self.kl_loss.result()}
+                "kl_loss": self.kl_loss.result(),
+                "kl_annealed": self.kl_annealed.result()}
 
     @tf.function
     def test_step(self, x, y=None):
@@ -102,11 +107,13 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
 
         self.reconstruction_loss.update_state(CE)
         self.kl_loss.update_state(KL)
+        self.kl_annealed.update_state(self.kl_weight * KL)
         self.vae_loss.update_state(vae_loss)
 
         return {"vae_loss": self.vae_loss.result(),
                 "reconstruction_loss": self.reconstruction_loss.result(),
-                "kl_loss": self.kl_loss.result()}
+                "kl_loss": self.kl_loss.result(),
+                "kl_annealed": self.kl_annealed.result()}
 
     @tf.function
     def sample(self, epsilon=None, size=1):
@@ -120,11 +127,19 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         z_mean, z_logvar, z = self.encoder(x)
         return z_mean, z_logvar, z
 
-    def decode(self, z, apply_softmax=False):
-        """ Decodes multiple latent variables. """
+    def decode(self, z, apply_softmax=False, apply_onehot=False):
+        """ Decodes multiple latent variables.
+
+            If `apply_onehot` is `True` the function will also apply the softmax.
+        """
         x_hat = self.decoder(z)
-        if apply_softmax:
-            return tf.nn.softmax(x_hat, axis=-1)
+
+        if apply_softmax or apply_onehot:
+            x_hat = tf.nn.softmax(x_hat, axis=-1)
+
+            if apply_onehot:
+                x_hat = make_onehot(x_hat)
+
         return x_hat
 
     def call(self, x):
