@@ -103,7 +103,7 @@ def kdtree_density(points, radius, return_tree=False):
 
     ball_trees = tree.query_ball_tree(tree, radius)
     frequency = np.array([len(neighbours) for neighbours in ball_trees])
-    density = np.mean(frequency / radius ** n)
+    density = np.mean(frequency)  # / radius ** n
 
     if return_tree:
         return density, tree

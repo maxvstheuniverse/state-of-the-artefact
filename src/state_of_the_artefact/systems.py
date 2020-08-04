@@ -62,7 +62,6 @@ class Recommender(ConceptualSpace):
                 # store entry
                 self.repository.append(domain_entry)
 
-        # return positions
         return z_means.numpy()
 
     def select_artefacts(self, agent_id):

@@ -285,7 +285,6 @@ def simulation_dynamic(args):
 
         evaluations.append(evaluation)
 
-
     print("Done.")
     print(f"Time Elapsed: {time.time() - start_time:0.3f}s")
 
