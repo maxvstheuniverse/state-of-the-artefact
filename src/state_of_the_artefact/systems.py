@@ -34,7 +34,7 @@ class Recommender(ConceptualSpace):
         super().__init__(TIMESTEPS, DIMENSIONS)
         self.name = "recommender"
         self.seed = seed
-        self.fit(self.seed, epochs=50, batch_size=BATCH_SIZE)
+        self.fit(self.seed, epochs=1000, batch_size=64)
         self.repository = []
 
     def generate_seeds(self, n_agents, samples=2000):
