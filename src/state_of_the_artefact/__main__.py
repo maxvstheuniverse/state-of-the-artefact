@@ -14,7 +14,7 @@ from state_of_the_artefact.representation import generate_midi_data, create_ctab
 BATCH_SIZE = 32
 TIMESTEPS = 16
 MIDI_RANGE = range(24, 36)
-SAMPLES = 50000
+SAMPLES = 20000
 
 sid = shortid.ShortId()
 data_path = os.path.join(os.getcwd(), "data")
