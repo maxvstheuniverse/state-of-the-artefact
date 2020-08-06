@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import Model, layers, metrics
-from state_of_the_artefact.utilities import make_onehot
+from state_of_the_artefact.utilities import one_hot
 
 
 def sampling(args):
@@ -15,6 +15,16 @@ def reconstruction_loss(x_logits, x):
 
 def kl_loss(z_mean, z_logvar):
     return -0.5 * tf.reduce_mean(1 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar))
+
+
+@tf.function
+def accuracy(x, x_hat):
+    return tf.reduce_mean(
+        tf.cast(
+            tf.equal(tf.argmax(x, axis=-1), tf.argmax(x_hat, axis=-1)),
+            "float32"
+        )
+    )
 
 
 class RecurrentVariationalAutoEncoder(tf.keras.Model):
@@ -34,11 +44,14 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
 
+        # -- Metrics
         self.vae_loss = metrics.Mean(name="vae_loss")
         self.reconstruction_loss = metrics.Mean(name="reconstruction_loss")
         self.kl_loss = metrics.Mean(name="kl_loss")
         self.kl_annealed = metrics.Mean(name="kl_annealed")
+        self.accuracy = tf.keras.metrics.CategoricalAccuracy()
 
+        # -- Variables
         self.kl_weight = tf.Variable(beta, trainable=False)
 
         # -- Encoder
@@ -78,6 +91,7 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
             KL = kl_loss(z_mean, z_logvar)
 
             vae_loss = CE + self.kl_weight * KL
+            batch_accuracy = accuracy(y, x_logits)
 
         gradients = tape.gradient(vae_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_weights))
@@ -86,11 +100,13 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         self.kl_loss.update_state(KL)
         self.kl_annealed.update_state(self.kl_weight * KL)
         self.vae_loss.update_state(vae_loss)
+        self.accuracy.update_state(batch_accuracy)
 
         return {"vae_loss": self.vae_loss.result(),
                 "reconstruction_loss": self.reconstruction_loss.result(),
                 "kl_loss": self.kl_loss.result(),
-                "kl_annealed": self.kl_annealed.result()}
+                "kl_annealed": self.kl_annealed.result(),
+                "accuracy": self.accuracy.result()}
 
     @tf.function
     def test_step(self, x, y=None):
@@ -104,22 +120,25 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         CE = reconstruction_loss(x_logit, y)
         KL = kl_loss(z_mean, z_logvar)
         vae_loss = CE + KL
+        batch_accuracy = accuracy(y, x_logits)
 
         self.reconstruction_loss.update_state(CE)
         self.kl_loss.update_state(KL)
         self.kl_annealed.update_state(self.kl_weight * KL)
         self.vae_loss.update_state(vae_loss)
+        self.accuracy.update_state(batch_accuracy)
 
         return {"vae_loss": self.vae_loss.result(),
                 "reconstruction_loss": self.reconstruction_loss.result(),
                 "kl_loss": self.kl_loss.result(),
-                "kl_annealed": self.kl_annealed.result()}
+                "kl_annealed": self.kl_annealed.result(),
+                "accuracy": self.accuracy.result()}
 
     @tf.function
-    def sample(self, epsilon=None, size=1):
+    def sample(self, epsilon=None, size=1, mean=0.0, stddev=0.1):
         """ Generates a random sample. """
         if epsilon is None:
-            epsilon = tf.random.normal(shape=(size, self.latent_dim))
+            epsilon = tf.random.normal(shape=(size, self.latent_dim), mean=mean, stddev=stddev)
         return self.decode(epsilon, apply_softmax=True)
 
     def encode(self, x):
@@ -128,17 +147,14 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         return z_mean, z_logvar, z
 
     def decode(self, z, apply_softmax=False, apply_onehot=False):
-        """ Decodes multiple latent variables.
-
-            If `apply_onehot` is `True` the function will also apply the softmax.
-        """
+        """ Decodes multiple latent variables. """
         x_hat = self.decoder(z)
 
-        if apply_softmax or apply_onehot:
-            x_hat = tf.nn.softmax(x_hat, axis=-1)
+        if apply_softmax:
+            return tf.nn.softmax(x_hat, axis=-1)
 
-            if apply_onehot:
-                x_hat = make_onehot(x_hat)
+        if apply_onehot:
+            return one_hot(x_hat)
 
         return x_hat
 

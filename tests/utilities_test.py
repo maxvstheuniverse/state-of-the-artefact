@@ -1,6 +1,6 @@
 import numpy as np
 
-from state_of_the_artefact.utilities import reverse_sequences, make_onehot
+from state_of_the_artefact.utilities import reverse_sequences, one_hot
 
 
 def test_reverse_sequences():
@@ -27,20 +27,31 @@ def test_reverse_sequences_one_hot():
     assert np.array_equal(a, b), "The one-hot sequences are not correctly reversed"
 
 
-def test_reverse_sequences_one_hot_single():
-    a = np.array([[1, 0, 0, 0, 0],
-                  [0, 1, 0, 0, 0],
-                  [0, 0, 1, 0, 0]])
-    a = a[::-1]
-    b = np.array([[0, 0, 1, 0, 0],
-                  [0, 1, 0, 0, 0],
-                  [1, 0, 0, 0, 0]])
+def test_one_hot_default():
+    array = np.array([[4, 6, 10],
+                      [3, 0, 2]])
 
-    assert np.array_equal(a, b), "The single one-hot sequence are not correctly reversed"
+    a = one_hot(array)
+    b = np.array([[[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]],
+                  [[0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]]])
+
+    assert np.array_equal(a, b), "with default depth, not correctly onehot encoded"
 
 
-def test_make_onehot():
-    a = make_onehot(np.array([[[1, 2, 3, 4], [1, 4, 3, 2]], [[1, 2, 3, 4], [1, 4, 3, 2]]]))
-    b = [[[0, 0, 0, 1], [0, 1, 0, 0]], [[0, 0, 0, 1], [0, 1, 0, 0]]]
+def test_one_hot_5d():
+    array = np.array([[4, 4, 1],
+                      [3, 0, 2]])
 
-    assert np.array_equal(a, b), "The 3D array are not correctly onehot encoded"
+    a = one_hot(array, 5)
+    b = np.array([[[0, 0, 0, 0, 1],
+                   [0, 0, 0, 0, 1],
+                   [0, 1, 0, 0, 0]],
+                  [[0, 0, 0, 1, 0],
+                   [1, 0, 0, 0, 0],
+                   [0, 0, 1, 0, 0]]])
+
+    assert np.array_equal(a, b), "with depth 5, not correctly onehot encoded"

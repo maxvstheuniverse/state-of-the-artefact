@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial import Delaunay, KDTree
+from scipy.spatial import Delaunay, cKDTree
+from sklearn.neighbors import BallTree
+import time
 
 
 def density(points):
@@ -34,7 +36,7 @@ def delaunay_density(points):
 
 
 def kdtree_density(points, radius, exclude_root=True):
-    tree = KDTree(points)
+    tree = cKDTree(points)
     neighbours = tree.query_ball_tree(tree, radius)
 
     assert len(neighbours) == len(points), "Number of points should be equal to the number of neighbour lists."
@@ -51,35 +53,56 @@ def kdtree_density(points, radius, exclude_root=True):
     return np.mean(frequency / radius ** points.shape[-1])
 
 
-x1 = [np.random.rand(1000, 2) * 10 - 5 for _ in range(50)]
-x2 = [np.random.rand(5, 2) * 10 - 5 for _ in range(50)]
+def balltree_density(x, r=.1):
+    tree = BallTree(x)
+    frequency = tree.query_radius(x, r, count_only=True)
+    return np.mean(frequency / r)
 
-delaun1 = [delaunay_density(x) for x in x1]
-delaun2 = [delaunay_density(x) for x in x2]
 
-kdtree1 = [kdtree_density(x, 1) for x in x1]
-kdtree2 = [kdtree_density(x, 1) for x in x2]
+def balltree_kde_density(x):
+    tree = BallTree(x)
+    h = np.std(x) * (4 / 3 / len(x)) ** (1 / 5)  # Silverman's Rule of Thumb
+    density = tree.kernel_density(x, h)
+    return np.mean(density)
 
-fig, axs = plt.subplots(2, 2)
 
-axs[0][0].plot(delaun1, label="large")
-axs[0][0].plot(delaun2, label="small")
-axs[0][0].set_title(f"Delaunay (l={np.mean(delaun1):0.3f}, s={np.mean(delaun2):0.3f})\nLower is denser")
+radius = 20
+x1 = [np.random.rand(30 + 8 * i, 32) * 10 - 5 for i in range(1, 251)]
+x2 = [np.random.rand(30 + 8 * i, 32) * 5 - 2.5 for i in range(1, 1)]
 
-axs[0][1].plot(kdtree1, label="large")
-axs[0][1].plot(kdtree2, label="small")
-axs[0][1].set_title(f"KDTree (l={np.mean(kdtree1):0.3f}, s={np.mean(kdtree2):0.3f})\nHigher is denser")
+start_time = time.time()
+delaun1 = [balltree_density(x, radius) for x in x1]
+delaun2 = [balltree_density(x, radius) for x in x2]
+print(f"{time.time() - start_time}s")
 
-# get the for median large samples
-i1 = np.argsort(delaun1)[len(delaun1) // 2]
-i2 = np.argsort(kdtree1)[len(kdtree1) // 2]
+start_time = time.time()
+kdtree1 = [balltree_kde_density(x) for x in x1]
+hs1 = [np.std(x) * (4 / 3 / len(x)) ** (1 / 5) for x in x1]
+kdtree2 = [balltree_kde_density(x) for x in x2]
+hs2 = [np.std(x) * (4 / 3 / len(x)) ** (1 / 5) for x in x2]
+print(f"{time.time() - start_time}s")
 
-axs[1][0].scatter(x1[i1][:, 0], x1[i1][:, 1])
-axs[1][0].scatter(x2[i1][:, 0], x2[i1][:, 1])
-axs[1][0].set_title("Delaunay Median Sample")
+fig, axs = plt.subplots(1, 2)
 
-axs[1][1].scatter(x1[i2][:, 0], x1[i2][:, 1])
-axs[1][1].scatter(x2[i2][:, 0], x2[i2][:, 1])
-axs[1][1].set_title("KDTree Median Sample")
+axs[0].plot(delaun1, label="less dense")
+axs[0].plot(delaun2, label="dense")
+axs[0].set_title(f"BallTree (r={radius})")
+axs[0].set_xlabel("Samples (30 + 8 x i)")
+axs[0].set_ylabel("Density")
 
+axs[1].plot(kdtree1, label="less dense")
+axs[1].plot(kdtree2, label="dense")
+axs[1].set_title(f"KDE (h_1={np.mean(hs2):0.3f}, h_2={np.mean(hs1):0.3f})")
+axs[1].set_xlabel("Samples (30 + 8 x i)")
+axs[1].set_ylabel("Density")
+
+# get the for median large sample
+
+# axs[1][0].scatter(x1[0][:, 0], x1[0][:, 1], label="less dense")
+# axs[1][0].scatter(x2[0][:, 0], x2[0][:, 1], label="dense")
+
+# axs[1][1].scatter(x1[9][:, 0], x1[9][:, 1], label="less dense")
+# axs[1][1].scatter(x2[9][:, 0], x2[9][:, 1], label="dense")
+
+fig.legend(loc="lower center", labels=["less dense", "dense"], ncol=2)
 plt.show()

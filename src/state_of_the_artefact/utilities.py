@@ -1,9 +1,15 @@
 import numpy as np
 import scipy.stats as ss
 from scipy.spatial.kdtree import KDTree
+from sklearn.neighbors import BallTree
+
+
+default_eye = np.eye(12)
 
 
 def reverse_sequences(sequences):
+    ndims = len(np.array(sequences).shape)
+    assert ndims == 3, f"Expected ndim=3, but got ndim={ndims}"
     return np.array([seq[::-1] for seq in sequences])
 
 
@@ -25,13 +31,10 @@ def interpolate(a, b, nsteps):
     return np.array(steps)
 
 
-def make_onehot(x):
-    m = np.zeros(x.shape)
-    indices = np.argmax(x, axis=-1)
-    for i, n in enumerate(m):
-        for j, o in enumerate(n):
-            o[indices[i, j]] = 1
-    return m
+def one_hot(x, num_classes=12):
+    if num_classes != 12:
+        return np.eye(num_classes)[x]
+    return default_eye[x]
 
 
 def generate_integer_probabilities(minv, maxv, loc, scale):
@@ -103,9 +106,30 @@ def kdtree_density(points, radius, return_tree=False):
 
     ball_trees = tree.query_ball_tree(tree, radius)
     frequency = np.array([len(neighbours) for neighbours in ball_trees])
-    density = np.mean(frequency)  # / radius ** n
+    density = frequency / radius ** n
 
     if return_tree:
-        return density, tree
+        return np.mean(density), tree
+
+    return np.mean(density)
+
+
+def nn_density(x, tree, r=.1, apply_mean=False):
+    frequency = tree.query_radius(x, r, count_only=True)
+    density = frequency / r
+
+    if apply_mean:
+        return np.mean(density)
+
+    return density
+
+
+def kde_density(x, tree, apply_mean=False):
+    data = tree.get_arrays()[0]
+    h = np.std(data) * (4 / 3 / len(data)) ** (1 / 5)  # Silverman's Rule of Thumb
+    density = tree.kernel_density(x, h)
+
+    if apply_mean:
+        return np.mean(density)
 
     return density

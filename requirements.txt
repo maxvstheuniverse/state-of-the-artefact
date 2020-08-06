@@ -6,3 +6,5 @@ pandas==1.0.4
 pycodestyle==2.6.0
 pytest==5.4.3
 tensorflow==2.2.0
+compress-pickle==1.2.0
+boto3==1.14.35

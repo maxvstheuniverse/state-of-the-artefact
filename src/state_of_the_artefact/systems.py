@@ -2,111 +2,110 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import random
+from sklearn.neighbors import BallTree
 
 from state_of_the_artefact.ConceptualSpace import ConceptualSpace
-from state_of_the_artefact.utilities import reverse_sequences
+from state_of_the_artefact.utilities import reverse_sequences, kde_density, one_hot
 
 TIMESTEPS = 16
 DIMENSIONS = (12, 128, 32)  # input, hidden, latent
 BATCH_SIZE = 32
 
 
-class Observer(ConceptualSpace):
-    def __init__(self, n_cultures, n_agents, n_artefacts, seeds):
-        super().__init__(TIMESTEPS, DIMENSIONS)
-        self.name = "observer"
-
-        # -- make sure there is a seed for every culture
-        assert len(seeds) == n_cultures
-
-        # -- initialize the cultures and its agents
-        self.cultures = [Culture(i, n_agents, n_artefacts, seeds[i]) for i in range(n_cultures)]
-
-        # -- initialize the observer
-        # self.fit(self.seeds, batch_size=BATCH_SIZE)
-
-
 class Recommender(ConceptualSpace):
     """ The Recommender is static system non-learning Conceptual Space used
         for making predictions about individual positions
     """
-    def __init__(self, seed):
+    def __init__(self, seed, args=None):
         super().__init__(TIMESTEPS, DIMENSIONS)
         self.name = "recommender"
         self.seed = seed
-        self.fit(self.seed, epochs=1000, batch_size=64)
-        self.repository = []
+        self.tree = None
+        self.frecency = {}
+
+        self.fit(self.seed, epochs=2000, batch_size=64)
 
     def generate_seeds(self, n_agents, samples=2000):
-        stddev = 1.0 / n_agents
-        means = np.linspace(-4.0 + stddev, 4.0 - stddev, num=n_agents)
+        stddev = 4.0 / n_agents
+        means = np.linspace(-3.5 + stddev, 3.5 - stddev, num=n_agents)
 
         zs = [tf.random.normal(shape=(samples, self.rvae.latent_dim),
-                               mean=means[i], stddev=stddev)
-              for i in range(n_agents)]
+                               mean=mean, stddev=stddev)
+              for mean in means]
 
         return [self.rvae.decode(z, apply_onehot=True) for z in zs]
 
-    def find_positions(self, entries, save_entries=True):
-        x = reverse_sequences([entry["artefact"] for entry in entries])
+    def generate_ball_tree(self):
+        points = [entry["domain_z_mean"] for entry in self.repository]
+        self.tree = BallTree(points)
+
+    def get_frencency_counts(self, artefact_ids):
+        return [self.frecency[artefact_id] for artefact_id in artefact_ids]
+
+    def update_frecency(self, artefact_ids):
+        # decay, do not decay below 1
+        frecency = {k: count - 1 if count > 1 else 1
+                    for k, count in self.frecency.items()}
+
+        # growth
+        for artefact_id in artefact_ids:
+            frecency[artefact_id] = frecency[artefact_id] + 1
+
+        self.frecency = frecency
+
+    def find_densities(self, x, method="kde", r=1.0):
+        if method == "knn":
+            pass  # TODO
+
+        if method == "kde":
+            return kde_density(x, self.tree)
+
+    def find_positions(self, entries, save_entries=True, frecency=False):
+        x = reverse_sequences(one_hot([entry["artefact"] for entry in entries]))
         z_means, z_logvars, zs = self.rvae.encode(x)
 
         if save_entries:
-            for entry, z_mean, z_logvar, z in zip(entries, z_means, z_logvars, zs):
-                # append extra domain information
-                domain_entry = {**entry,
-                                "domain_z_mean": z_mean.numpy(),
-                                "domain_z_logvar": z_logvar.numpy(),
-                                "domain_z": z.numpy()}
-
-                # store entry
-                self.repository.append(domain_entry)
+            self.save(entries, zs, frecency=frecency)
 
         return z_means.numpy()
 
-    def select_artefacts(self, agent_id):
-        # NOTE: Do I want to keep track of every artefact selected?
-        return [entry["artefact"] for entry in self.repository if entry["agent_id"] == agent_id]
+    def select_artefacts(self, agent_id, frecency=False):
+        """ NOTE: Artefacts not in one-hot encoding. """
+        artefacts = []
+        for entry in self.repository:
+            if entry["agent_id"] == agent_id:
+                if frecency:
+                    artefacts.append((entry["artefact_id"], entry["artefact"]))
+                else:
+                    artefacts.append(entry["artefact"])
 
-    def save(self, entries, evaluate=True):
-        # TODO: Refactor
-        x = reverse_sequences([entry["artefact"] for entry in entries])
-        z_means, z_logvars, zs = self.rvae.encode(x)
+        return np.array(artefacts)
 
-        for entry, z_mean, z_logvar, z in zip(entries, z_means, z_logvars, zs):
-            # append extra domain information
+    def check_artefact(self, agent_id, artefact):
+        """ Check if artefact is already created by the agent. """
+        artefact = np.argmax(artefact, axis=-1)
+        artefacts = self.select_artefacts(agent_id)
+        return np.any(np.equal(a, b).all(axis=1))
+
+    def save(self, entries, zs=None, frecency=False):
+        """ Stores entries in the reposity, generates latent encodings if not provided. """
+        if zs is None:
+            x = reverse_sequences(one_hot([[entry["artefact"]] for entry in entries]))
+            zs = self.rvae.encode(x)
+
+        for entry, z_mean, z_logvar, z in zip(entries, *zs):
             domain_entry = {**entry,
                             "domain_z_mean": z_mean.numpy(),
                             "domain_z_logvar": z_logvar.numpy(),
                             "domain_z": z.numpy()}
 
-            # store entry
             self.repository.append(domain_entry)
+
+            if frecency:
+                self.frecency.append({entry['artefact_id']: 10})
 
     def export(self):
         return self.repository
-
-
-class Culture(ConceptualSpace):
-    def __init__(self, culture_id, n_agents, n_artefacts, seed, **kwargs):
-        super().__init__(TIMESTEPS, DIMENSIONS)
-        self.name = f"culture_{culture_id}"
-        self.id = culture_id
-
-        self.seed = seed
-
-        # TODO: Use unique seed for every agent?
-        self.agents = [Agent(i, culture_id) for i in range(n_agents)]
-        self.selected = [np.array(random.choices(self.seed, k=n_artefacts)) for _ in range(n_agents)]
-
-        for agent in self.agents:
-            agent.fit(self.seed, batch_size=BATCH_SIZE)
-
-        self.fit(self.seed, batch_size=BATCH_SIZE)
-
-    def select(self, agent_id):
-        """ Returns all known arte facts created by the specified agent. """
-        return [artefact[4] for artefact in self.repository if artefact[1] == agent_id]
 
 
 class Agent(ConceptualSpace):
@@ -114,35 +113,23 @@ class Agent(ConceptualSpace):
         super().__init__(TIMESTEPS, DIMENSIONS)
         self.name = f"agent_{agent_id}"  # f"agent_{culture_id}_{agent_id}"
         self.id = agent_id
+        self.fit(seed, batch_size=BATCH_SIZE)
 
-        self.repository = []
+    def sample(self, zs, sample_mode="mean"):
+        mean = zs.mean(axis=0, keepdims=True)
 
-        self.artefacts = []
-        self.artefacts_reversed = []
+        if sample_mode == "mean":
+            return mean
 
-        self.seed = seed
-        self.seed_reversed = reverse_sequences(seed)
-
-        self.fit(self.seed, batch_size=BATCH_SIZE)
-
-    def select(self):
-        # NOTE: Do I want to keep track of every artefact selected?
-        return [entry["artefact"] for entry in self.repository]
+        if sample_mode == "sample":
+            logvar = zs.var(axis=0, keepdims=True)
+            return np.random.normal(mean, logvar, (1, 32))
 
     def build(self, z):
         """ Returns a reconstructed artefact for the given latent variables. """
         artefact = self.rvae.decode(z, apply_onehot=True)
         z_mean, _, _ = self.rvae.encode(artefact)
-        return artefact, z_mean.numpy()
-
-    def save(self, entries):
-        for entry in entries:
-            self.repository.append(entry)
-
-            # and store the artefact (and its reverse) for evaluation
-            # saves some resources by reversing the artefacts each epoch.
-            self.artefacts.append(entry["artefact"])
-            self.artefacts_reversed.append(entry["artefact"][::-1])
+        return artefact[0], z_mean.numpy()
 
     def evaluate(self, x):
         """ Returns the evaluation and the accuracy for a perfect reconstruction and timestep

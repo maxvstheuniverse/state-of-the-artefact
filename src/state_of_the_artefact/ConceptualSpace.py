@@ -73,59 +73,13 @@ class ConceptualSpace():
 
             budget -= 1
 
-        z_mean, z_logvar, z = self.rvae.encode(x)
-        z = z.numpy()
-
-        if apply_mean:
-            mu = z.mean(axis=0, keepdims=True)
-
-            if from_sample:
-                sigma = z.var(axis=0, keepdims=True)
-                return np.random.normal(mu, sigma, (1, 32))
-            else:
-                return mu
-        else:
-            return z
+        _, _, z = self.rvae.encode(x)
+        return z.numpy()
 
     def encode(self, artefacts):
         x = reverse_sequences(artefacts)
-        return self.rvae.encode(x)
-
-    def store(self, entry):
-        self.repository.append(entry)
-
-    def evaluate(self, data):
-        """ Evaluate the current state of the conceptual space against a validation seed.
-
-            Returns a dict of metrics:
-                vae_loss,
-                reconstruction_loss,
-                kl_loss,
-                kl_annealed,
-                accuracy,
-                ts_accuracy
-        """
-        # TODO: optimization reverse sequences at initialization
-        x = reverse_sequences(seed)
-        evaluation = self.rvae.evaluate(x, seed, verbose=0, return_dict=True)
-
-        _, _, z = self.rvae.encode(x)
-        reconstructions = self.rvae.decode(z)
-
-        correct = 0
-        ts_correct = 0
-        for original, reconstruction in zip(x, reconstructions):
-            a = np.argmax(original, axis=1)
-            b = np.argmax(reconstruction, axis=1)
-
-            if np.array_equiv(a, b):
-                correct += 1
-
-            ts_correct += np.sum([0 if x == y else 1 for x, y in zip(a, b)]) / TIMESTEPS
-
-        evaluation["accuracy"] = correct / len(x)
-        evaluation["ts_accuracy"] = ts_correct / len(x)
-        return evaluation
+        z_mean, z_logvar, z = self.rvae.encode(x)
+        return z_mean.numpy(), z_logvar.numpy(), z.numpy()
 
     def reconstruct(self):
         """ Reconstruct all created artefacts by the agent. """
@@ -134,12 +88,3 @@ class ConceptualSpace():
         z_mean, z_logvar, z = self.encode(np.array(artefacts))
         x_hat = self.rvae.decode(z).numpy()
         return np.array([*zip(artefact_ids, o_z_mean, z_mean, z_logvar, z, artefacts, x_hat)])
-
-    def export(self):
-        epochs, agent_ids, culture_ids, artefact_id, artefacts, o_z_mean = list(zip(*self.repository))
-        z_mean, z_logvar, z = self.encode(artefacts)
-
-        data = list(zip(epochs, agent_ids, culture_ids, artefact_id, artefacts,
-                        o_z_mean, z_mean.numpy(), z_logvar.numpy(), z.numpy()))
-        return np.array(data)
-
