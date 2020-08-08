@@ -1,10 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import Model, layers, metrics
-<<<<<<< HEAD
 from state_of_the_artefact.utilities import one_hot
-=======
-from state_of_the_artefact.utilities import make_onehot
->>>>>>> ed6bc30df6965ef02a03342dec8910f7aaea45cd
 
 
 def sampling(args):

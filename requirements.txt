@@ -1,4 +1,4 @@
-boto3==1.14.35
+boto3==1.14.36
 compress-pickle==1.2.0
 imageio==2.8.0
 jupyter==1.0.0
