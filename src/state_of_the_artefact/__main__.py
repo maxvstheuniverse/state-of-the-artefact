@@ -63,8 +63,6 @@ def run_simulation(args):
     start_time = time.time()
 
     parameters = pd.Series(vars(args))
-    print("\nStarting simulation with the following parameters:")
-    print(parameters.to_string(), end="\n\n")
 
     data = {"parameters": parameters,
             "evaluations": [],
@@ -117,6 +115,9 @@ def run_simulation(args):
 
     # -- export starting domain
     data["domain"] += [recommender.export()]
+
+    print("\nStarting simulation with the following parameters:")
+    print(parameters.to_string(), end="\n\n")
 
     # -----------------------------------------------------------------------------------------
     # -- LOOP
