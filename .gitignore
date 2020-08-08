@@ -1,11 +1,14 @@
 logs/tsne_animation
 Miniconda3-latest-Linux-x86_64.sh
+
 credentials*
 _data
 data
 data copy
+
 logs/tests
 logs/other
+logs/*.gif
 
 ### https://raw.github.com/github/gitignore/65047ae444f1a784cde8d6f52c32e781a484a505/Python.gitignore
 
