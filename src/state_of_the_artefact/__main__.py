@@ -295,7 +295,7 @@ def run_simulation(args):
 
     end_time = time.time()
     elapsed = end_time - start_time
-print(f"Total time elapsed: {elapsed:0.3f}s")
+    print(f"Total time elapsed: {elapsed:0.3f}s")
 
     data["timings"] = pd.Series({"duration": elapsed,
                                  "start_time": time.strftime('%Y-%m-%dT%H-%M-%S',
