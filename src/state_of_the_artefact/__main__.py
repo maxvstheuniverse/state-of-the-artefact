@@ -409,7 +409,7 @@ def main(args=None):
 
     if args.save_remote:
         print("Uploading...", end=" ")
-        upload_obj(result, "state-of-the-artefact", f"{file_name}.gz", compression="gzip")
+        upload_obj(results, "state-of-the-artefact", f"{file_name}.gz", compression="gzip")
     else:
         print("Saving...", end=" ")
         pd.Series(results).to_pickle(os.path.join(data_path, "output", f"{file_name}.gzip"))
