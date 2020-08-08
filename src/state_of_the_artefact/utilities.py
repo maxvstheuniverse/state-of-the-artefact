@@ -57,8 +57,8 @@ def punish(x, scale=1.1, offset=10):
     return -scale * (1 / (1 + np.exp(-15 * x + offset)))
 
 
-def hedonic(x):
-    return reward(x) + punish(x)
+def hedonic(x, scale=(1, 1.1), offset=(5, 10)):
+    return reward(x, scale[0], offset[0]) + punish(x, scale[1], offset[1])
 
 
 def delaunay_density(points, mode="edges", return_triangles=False):

@@ -18,7 +18,6 @@ class ConceptualSpace():
                                                     latent_dim)
         self.rvae.compile(optimizer='adam')
 
-        self.budget = 100
         self.repository = []
 
     def fit(self, seed, epochs=500, annealing_epochs=15, model_path=None, **kwargs):
@@ -40,21 +39,9 @@ class ConceptualSpace():
             self.rvae.save_weights(model_path)
             print("Done.")
 
-    def learn(self, artefacts, apply_mean=True, from_sample=False):
-        """ Trains the individual to understand the presented artefacts.
-
-            If `apply_mean` is `True` it returns the interpolated latent variables of the
-            presented artefacts.
-
-            If `from_sample` is `True` it returns an interpolated latent variable sampled
-            from a normal distrubution with the mean and variance of the latent variables
-            of the learned artefacts.
-
-            Otherwise, it returns the sampled latent variables of each artefact  .
-        """
-        budget = self.budget
+    def learn(self, artefacts, budget=100):
+        """ Trains the individual to understand the presented artefacts. """
         num_artefacts = len(artefacts)
-
         x = reverse_sequences(artefacts)
 
         correct = 0
@@ -73,13 +60,17 @@ class ConceptualSpace():
 
             budget -= 1
 
-        _, _, z = self.rvae.encode(x)
-        return z.numpy()
+        z_mean, _, _ = self.rvae.encode(x)
+        return z_mean.numpy()
 
     def encode(self, artefacts):
         x = reverse_sequences(artefacts)
         z_mean, z_logvar, z = self.rvae.encode(x)
         return z_mean.numpy(), z_logvar.numpy(), z.numpy()
+
+    def decode(self, z, apply_softmax=False, apply_onehot=False):
+        x_hat = self.rvae.decode(z, apply_softmax, apply_onehot)
+        return x_hat
 
     def reconstruct(self):
         """ Reconstruct all created artefacts by the agent. """
