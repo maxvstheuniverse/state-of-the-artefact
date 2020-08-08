@@ -16,8 +16,8 @@ from state_of_the_artefact.utilities import one_hot
 TODO:
 
 [x] finalize s3
-[ ] test s3 on liacs computers
-[/] avoid duplicates
+[x] test s3 on liacs computers
+[x] avoid duplicates
 [x] frecency
 [ ] novelty in agents
 [ ]    - hedonic from center (sample 10 pick highest)
@@ -62,7 +62,11 @@ def make_entry(epoch, agent, artefact, z_mean):
 def run_simulation(args):
     start_time = time.time()
 
-    data = {"args": pd.Series(vars(args)),
+    parameters = pd.Series(vars(args))
+    print("\nStarting simulation with the following parameters:")
+    print(parameters.to_string(), end="\n\n")
+
+    data = {"parameters": parameters,
             "evaluations": [],
             "reconstructions": [],
             "interactions": [],
@@ -75,8 +79,8 @@ def run_simulation(args):
     agent_seeds_path = os.path.join(data_path, "seeds", "agent_seeds.npy")
 
     try:
-        domain_seed = np.load(domain_seed_path)
-        agent_seeds = np.load(agent_seeds_path)
+        domain_seed = np.load(domain_seed_path, allow_pickle=True)
+        agent_seeds = np.load(agent_seeds_path, allow_pickle=True)
     except IOError as e:
         print(e.args)
         return 1
@@ -86,24 +90,26 @@ def run_simulation(args):
 
     # -- Other sim settings
     frecency = args.interaction_mode == 'frecency'
+    with_ids = args.interaction_mode != 'uniform'
 
     # -----------------------------------------------------------------------------------------
     # -- EPOCH 0
 
     # -- prepare initial artefacts
-    # TODO: permutation
+    # seed[np.random.choice(np.arange(len(seed)), size=args.n_artefacts, replace=False)]
 
-    selected = [np.random.choice(available_artefacts,
-                                 size=args.n_artefacts, replace=False)
-                for seed in agent_seeds]
+    # returns the artefacts and their z_means
+    initial_artefacts = [agent.build(agent.sample(args.sample_mode, 0.25, args.n_artefacts))
+                         for agent in agents]
 
-    # -- make entries for intial artefacts
-    for agent, artefacts in zip(agents, selected):
-        z_means, _, _ = agent.encode(artefacts)
+    for agent, (artefacts, z_means) in zip(agents, initial_artefacts):
         initial_entries = [make_entry(0, agent, artefact, z_mean)
                            for artefact, z_mean in zip(artefacts, z_means)]
 
-        recommender.save(initial_entries, frecency)
+        recommender.save(initial_entries, frecency=frecency)
+
+    selected = [artefact[0] for artefact in initial_artefacts]
+    assert np.array(selected).shape == (args.n_agents, 10, 16, 12)
 
     if args.interaction_mode == "density":
         # -- generate the first ball tree
@@ -115,7 +121,7 @@ def run_simulation(args):
     # -----------------------------------------------------------------------------------------
     # -- LOOP
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, args.n_epochs + 1):
         print(f"Epoch {epoch:03d}...", end=" ")
         epoch_start = time.time()
 
@@ -128,38 +134,46 @@ def run_simulation(args):
 
         for i, agent in enumerate(agents):
             # learn
-            zs = agent.learn(selected[i])
+            z_means = agent.learn(selected[i], args.budget)
 
-            tries = 10
-            while tries > 0:
-                # sample
-                z = agent.sample(zs, args.sample_mode)
+            # sample n new artefacts
+            if args.sample_mode == "mean":
+                z = agent.sample(args.sample_mode, args.novelty_preference, 1, z_means)
 
-                #  build, in one-hot encoding
-                artefact, z_mean = agent.build(z)
+            if args.sample_mode == "origin":
+                z = agent.sample(args.sample_mode, args.novelty_preference, 1)
 
-                # check
-                if recommender.check_artefact(artefact):
-                    entry = make_entry(epoch, agent, artefact, z_mean)
+            # calculate novelty values?
 
-                    # store
-                    agent.generate_ball_tree()
-                    new_entries.append(entry)
-                    break
-                else:
-                    tries -= 1
+            artefact, z_mean = agent.build(z)
+            entry = make_entry(epoch, agent, artefact[0], z_mean)
 
-            if tries == 0:
-                # generate a random sample from the whole!
-                pass
+            # store
+            new_entries.append(entry)
 
-            # NOTE: considerable computational resources, consider every n epochs
-            data["evaluations"] += [{"epoch": epoch,
-                                     "agent_id": agent.id,
-                                     **agent.evaluate("repository")}]
+            # tries = 10
+            # while tries > 0:
+            #     # sample
+            #     z = agent.sample(zs, args.sample_mode)
 
-            # NOTE: considerable computational resources, consider every n epochs
-            data["reconstructions"] += agent.reconstruct(epoch)
+            #     #  build, in one-hot encoding
+            #     artefact, z_mean = agent.build(z)
+
+            #     # check
+            #     duplicate = recommender.check_artefact(artefact)
+            #     if duplicate:
+            #         entry = make_entry(epoch, agent, artefact, z_mean)
+
+            #         # store
+            #         agent.generate_ball_tree()
+            #         new_entries.append(entry)
+            #         break
+            #     else:
+            #         tries -= 1
+
+            # if tries == 0:
+            #     # generate a random sample from the whole!
+            #     pass
 
         # -------------------------------------------------------------------------------------
         # -- DOMAIN
@@ -175,11 +189,15 @@ def run_simulation(args):
 
         # TODO: implement different social interaction policies.
         for i, agent in enumerate(agents):
+
+            # -- FIELD NEIGHBOURS
+
             # calculate distances to other agents
             distances = np.linalg.norm(positions[i] - positions, axis=1)
 
-            # get neighbours, sort, return indices, skip first as this is the current agent.
-            neighbours = np.argsort(distances)[1:args.n_neighbours + 1]
+            # get neighbours, sort, return indices, remove current agent
+            neighbours = [nghbr for nghbr in np.argsort(distances) if nghbr != agent.id]
+            assert agent.id not in neighbours, "Current agent is present in neighbour list."
 
             # record interactions
             data["interactions"] += [{"epoch": epoch,
@@ -190,38 +208,71 @@ def run_simulation(args):
 
             # gather artefacts created by the field
             available_artefacts = recommender.select_artefacts(agent.id,
-                                                               frecency=frecency)
+                                                               with_ids=with_ids)
 
             for neighbour_id in neighbours:
                 neighbour_artefacts = recommender.select_artefacts(neighbour_id,
-                                                                   frecency=frecency)
-                available_artefacts = np.vstack(available_artefacts, neighbour_artefacts)
+                                                                   with_ids=with_ids)
+                available_artefacts = np.vstack([available_artefacts, neighbour_artefacts])
+
+            # -- FIELD MODE
 
             # default is uniform, which means no ideology in the population
             probabilities = None
 
-            # if based on density, the population favors artefacts which are "more"
-            # unique, based on the estimated density in their space.
-            if args.interaction_mode == "density":
-                # using the inverse in order to favor low density artefacts.
-                densities = 1 / recommender.find_densities(available_artefacts)
-                probabilities = densities / np.sum(densities)
-
-            # if based on frecency, the populations doesn't linger on the past.
-            # it favors recent and frequent creations.
-            if args.interaction_mode == "frecency":
+            if args.interaction_mode != "uniform":
                 artefact_ids = available_artefacts[:, 0]
-                counts = recommender.get_frecency_counts(artefact_ids)
-                probabilities = counts / np.sum(counts)
+                available_artefacts = np.vstack(available_artefacts[:, 1])
 
-            choices = np.random.choice(available_artefacts, size=args.n_artefacts,
-                                       replace=False, p=probabilities)
 
-            selected_ids += choices[:, 0]
-            selected_artefacts = choices[:, 1]
+                # if based on density, the population favors artefacts which are "more"
+                # unique, based on the estimated density in their space.
+                # Calculates the inverse in order to favor low density artefacts.
 
+                if args.interaction_mode == "density":
+                    # artefact_ids = available_artefacts[:, 0]
+                    densities = 1 / recommender.find_densities(artefact_ids)
+                    probabilities = densities / np.sum(densities)
+
+                # if based on frecency, the populations doesn't linger on the past.
+                # it favors recent and frequent creations.
+
+                if args.interaction_mode == "frecency":
+                    # artefact_ids = available_artefacts[:, 0]
+                    counts = recommender.get_frecency_counts(artefact_ids)
+                    probabilities = counts / np.sum(counts)
+                    print(counts)
+                    print(probabilities)
+
+            # -- FIELD SELECTION
+
+            choices = np.random.choice(np.arange(len(available_artefacts)),
+                                       size=args.n_artefacts,
+                                       replace=False,
+                                       p=probabilities)
+
+            selected_artefacts = available_artefacts[choices]
+
+            if args.interaction_mode == "frecency":
+                print(artefact_ids)
+                selected_ids.append(artefact_ids[choices])
+
+            # print(selected_artefacts, selected_artefacts.shape)
             # make the choices one hot gaain
             selected[i] = one_hot(selected_artefacts)
+
+            # -- WRAP UP EVALUATIONS FOR EACH AGENT
+
+            agent_entries = recommender.select_entries(agent.id)
+            agent_artefacts = one_hot(np.array([entry["artefact"] for entry in agent_entries]))
+
+            # NOTE: considerable computational resources, consider every n epochs
+            data["evaluations"] += [{"epoch": epoch,
+                                     "agent_id": agent.id,
+                                     **agent.evaluate(agent_artefacts)}]
+
+            # NOTE: considerable computational resources, consider every n epochs
+            data["reconstructions"] += agent.reconstruct(epoch, agent_entries, agent_artefacts)
 
         # -------------------------------------------------------------------------------------
         # -- ON EPOCH END UPDATES
@@ -231,27 +282,28 @@ def run_simulation(args):
             recommender.generate_ball_tree()
 
         if args.interaction_mode == 'frecency':
-            recommender.update_frecency(selected_ids)
+            recommender.update_frecency(np.hstack(selected_ids))
 
         # -------------------------------------------------------------------------------------
         # -- EXPORT DOMAIN
 
         if epoch % 25 == 0:
-            data["domain"] += [recommender.export()]
+            data["domain"].append(recommender.export())
 
-        epoch_log_time = f"{time.time() - epoch_start:0.3f}s".ljust(10, " ")
-        print(epoch_log_time, end=("\r" if epoch < args.epochs - 1 else "\n"))
+        epoch_log_time = f"{time.time() - epoch_start:0.3f}s".ljust(15, " ")
+        print(epoch_log_time, end=("\r" if epoch < args.n_epochs else "\n"))
 
     end_time = time.time()
     elapsed = end_time - start_time
-    print(f"Total time elapsed: {elapsed:0.3f}s")
+print(f"Total time elapsed: {elapsed:0.3f}s")
 
-    data["timings"] = pd.Series({"time_elapsed": elapsed,
-                                 "start_time": start_time,
-                                 "end_time": end_time})
+    data["timings"] = pd.Series({"duration": elapsed,
+                                 "start_time": time.strftime('%Y-%m-%dT%H-%M-%S',
+                                                             time.localtime(start_time)),
+                                 "end_time": time.strftime('%Y-%m-%dT%H-%M-%S',
+                                                           time.localtime(end_time))})
 
-    data = {k: v if is_pd(v) else pd.DataFrame(v) for k, v in results.items()}
-    return data
+    return {k: v if is_pd(v) else pd.DataFrame(v) for k, v in data.items()}
 
 
 def init(args=None):
@@ -275,7 +327,6 @@ def init(args=None):
                               do not exist yet.")
 
     args = parser.parse_args()
-    print(args)
 
     # -----------------------------------------------------------------------------------------
     # -- DOMAIN
@@ -310,10 +361,10 @@ def main(args=None):
     parser = argparse.ArgumentParser()
 
     # -- basic parameters
-    parser.add_argument("-a", "--agents", type=int, default=16, dest="n_agents",
-                        help="The number of agents in the simulation. Default: 16")
-    parser.add_argument("-e", "--epochs", type=int, default=250, dest="epochs",
+    parser.add_argument("-e", "--epochs", type=int, default=250, dest="n_epochs",
                         help="The number of rounds for the simulation. Default: 250")
+    parser.add_argument("-a", "--agents", type=int, default=8, dest="n_agents",
+                        help="The number of agents in the simulation. Default: 8")
     parser.add_argument("-n", "--neighbours", type=int, default=2, dest="n_neighbours",
                         help="The number of agents selected to be the field. Default: 2")
     parser.add_argument("-s", "--artefacts", type=int, default=10, dest="n_artefacts",
@@ -321,15 +372,17 @@ def main(args=None):
                               starting artefacts. Default: 10")
 
     # -- individual paramaters and modes
-    parser.add_argument("-sm", "--sample-mode", type=str, default="sample", dest="sample_mode",
-                        help="Sets the sample mode for the individual. Options: \
-                             'mean', 'sample'")
-    parser.add_argument("-nm", "--novelty-mode", type=str, default="density",
-                        dest="novelty_mode",
-                        help="Sets the novelty mode for the individual. Options: \
-                             'density', 'distance'")
-    parser.add_argument("--radius", type=float, default=1.0, dest="novelty",
-                        help="Sets the nearest-neighbour radius for the agents. Default: 1.0")
+    parser.add_argument("-sm", "--sample-mode", type=str, default="origin", dest="sample_mode",
+                        help="Sets the sample mode for the individual, use the origin, or the \
+                              mean of current artefacts presented by the field. \
+                              Options: 'mean', 'origin'")
+    parser.add_argument("-np", "--novelty-preference", type=float, default=0.25,
+                        dest="novelty_preference",
+                        help="Standard deviation used when sampling from the latent space. \
+                              Default: .25")
+    parser.add_argument("-b", "--budget", type=int, default=100, dest="budget",
+                        help="Maximum iterations for learning new artefacts presented by \
+                              the field.")
 
     # -- field parameters and modes
     parser.add_argument("-im", "--interaction-mode", type=str, default="uniform",
@@ -338,7 +391,7 @@ def main(args=None):
                               'uniform', 'frequency', 'density'")
 
     # -- export parameters
-    parser.add_argument("--save-remote", action="store_true"
+    parser.add_argument("--save-remote", action="store_true",
                         help="If set to true store results on Amazon S3. Make sure that the \
                               credentials are provided (~/.aws/credentials).")
     args = parser.parse_args()
@@ -352,15 +405,15 @@ def main(args=None):
     # -----------------------------------------------------------------------------------------
     # -- SAVE
 
-    file_name = f"sim_a{args.n_agents}_e{args.epochs}_{t}"
+    im, sm = args.interaction_mode, args.sample_mode
+    file_name = f"sim_a{args.n_agents}_e{args.n_epochs}_{im}_{sm}_{t}"
 
-    if save_remote:
+    if args.save_remote:
         print("Uploading...", end=" ")
         upload_obj(result, "state-of-the-artefact", f"{file_name}.gz", compression="gzip")
     else:
         print("Saving...", end=" ")
-        series = pd.Series(results)
-        series.to_pickle(os.path.join(data_path, "output", f"{file_name}.gzip"))
+        pd.Series(results).to_pickle(os.path.join(data_path, "output", f"{file_name}.gzip"))
 
     print("Done.")
     return 0

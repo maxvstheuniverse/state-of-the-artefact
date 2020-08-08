@@ -22,13 +22,9 @@ def kl_loss(z_mean, z_logvar):
 
 
 @tf.function
-def accuracy(x, x_hat):
+def accuracy(x, x_logits):
     return tf.reduce_mean(
-        tf.cast(
-            tf.equal(tf.argmax(x, axis=-1), tf.argmax(x_hat, axis=-1)),
-            "float32"
-        )
-    )
+        tf.cast(tf.equal(tf.argmax(x, axis=-1), tf.argmax(x_logits, axis=-1)), "float32"))
 
 
 class RecurrentVariationalAutoEncoder(tf.keras.Model):
@@ -53,7 +49,7 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
         self.reconstruction_loss = metrics.Mean(name="reconstruction_loss")
         self.kl_loss = metrics.Mean(name="kl_loss")
         self.kl_annealed = metrics.Mean(name="kl_annealed")
-        self.accuracy = tf.keras.metrics.CategoricalAccuracy()
+        self.accuracy = metrics.Mean(name="accuracy")
 
         # -- Variables
         self.kl_weight = tf.Variable(beta, trainable=False)
@@ -119,9 +115,9 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
             x = x[0]
 
         z_mean, z_logvar, z = self.encode(x)
-        x_logit = self.decode(z)
+        x_logits = self.decode(z)
 
-        CE = reconstruction_loss(x_logit, y)
+        CE = reconstruction_loss(x_logits, y)
         KL = kl_loss(z_mean, z_logvar)
         vae_loss = CE + KL
         batch_accuracy = accuracy(y, x_logits)
@@ -158,7 +154,7 @@ class RecurrentVariationalAutoEncoder(tf.keras.Model):
             return tf.nn.softmax(x_hat, axis=-1)
 
         if apply_onehot:
-            return one_hot(x_hat)
+            return one_hot(tf.argmax(x_hat, axis=-1).numpy())
 
         return x_hat
 
