@@ -309,6 +309,7 @@ def run_simulation(args):
 def init(args=None):
 
     parser = argparse.ArgumentParser()
+<<<<<<< HEAD
     parser.add_argument("-a", "--agents", type=int, default=16, dest="n_agents",
                         help="The number of agents in the simulation. Default: 16")
     parser.add_argument("-e", "--epochs", type=int, default=250, dest="epochs",
@@ -418,5 +419,35 @@ def main(args=None):
     return 0
 
 
+=======
+    parser.add_argument("-e", "--epochs", type=int, default=10, dest="epochs",
+                        help="The number of rounds for the simulation. Default: 10")
+
+    parser.add_argument("-c", "--cultures", type=int, default=1, dest="n_cultures",
+                        help="The number of agents in the simulation. Default: 1")
+    parser.add_argument("-a", "--agents", type=int, default=4, dest="n_agents",
+                        help="The number of agents in the simulation. Default: 4")
+    parser.add_argument("-n", "--neighbours", type=int, default=1, dest="n_neighbours",
+                        help="The number of agents selected to be the field. Default: 2")
+
+    parser.add_argument("-i", "--init-epochs", type=int, default=250, dest="init_epochs",
+                        help="The number of epochs used for schooling the individuals. \
+                              Default: 250")
+    parser.add_argument("-s", "--artefacts", type=int, default=10, dest="n_artefacts",
+                        help="The number of item selected each round. Default: 10")
+
+    parser.add_argument("--from_sample", type=bool, default=False, dest="from_sample",
+                        help="If `True` the agent returns a sampled position. \
+                              When `False` it returns the mean.")
+    parser.add_argument("--novelty", type=float, default=1.0, dest="novelty",
+                        help="Sets the novelty preference for the agents.")
+    args = parser.parse_args()
+
+    # launch simulation
+    simulation_static(args)
+    return 0
+
+
+>>>>>>> ed6bc30df6965ef02a03342dec8910f7aaea45cd
 if __name__ == "__main__":
     main()
