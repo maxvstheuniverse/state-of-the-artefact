@@ -5,7 +5,7 @@ import random
 from sklearn.neighbors import BallTree
 
 from state_of_the_artefact.ConceptualSpace import ConceptualSpace
-from state_of_the_artefact.utilities import reverse_sequences, kde_density, one_hot
+from state_of_the_artefact.utilities import reverse_sequences, kde_density, one_hot, decay
 
 TIMESTEPS = 16
 DIMENSIONS = (12, 128, 32)  # input, hidden, latent
@@ -34,7 +34,7 @@ class Recommender(ConceptualSpace):
 
     def update_frecency(self, artefact_ids):
         # decay, minimum is 1
-        frecency = {k: count - 1 if count > 1 else 1
+        frecency = {k: decay(count, dr=0.1, minimum=0.01)
                     for k, count in self.frecency.items()}
 
         # growth

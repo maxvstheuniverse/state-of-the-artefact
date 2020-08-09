@@ -225,7 +225,6 @@ def run_simulation(args):
                 artefact_ids = available_artefacts[:, 0]
                 available_artefacts = np.vstack(available_artefacts[:, 1])
 
-
                 # if based on density, the population favors artefacts which are "more"
                 # unique, based on the estimated density in their space.
                 # Calculates the inverse in order to favor low density artefacts.
@@ -258,7 +257,6 @@ def run_simulation(args):
                 print(artefact_ids)
                 selected_ids.append(artefact_ids[choices])
 
-            # print(selected_artefacts, selected_artefacts.shape)
             # make the choices one hot gaain
             selected[i] = one_hot(selected_artefacts)
 

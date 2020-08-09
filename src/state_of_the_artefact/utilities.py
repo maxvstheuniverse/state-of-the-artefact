@@ -133,3 +133,12 @@ def kde_density(x, tree, apply_mean=False):
         return np.mean(density)
 
     return density
+
+
+def decay(N, dr=0.1, minimum=0):
+    d = N * np.exp(-dr)
+
+    if minimum != 0:
+        return d
+
+    return np.max([d, minimum])
