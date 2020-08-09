@@ -97,7 +97,7 @@ def run_simulation(args):
     # seed[np.random.choice(np.arange(len(seed)), size=args.n_artefacts, replace=False)]
 
     # returns the artefacts and their z_means
-    initial_artefacts = [agent.build(agent.sample(args.sample_mode, 0.25, args.n_artefacts))
+    initial_artefacts = [agent.build(agent.sample('origin', 0.25, args.n_artefacts))
                          for agent in agents]
 
     for agent, (artefacts, z_means) in zip(agents, initial_artefacts):
@@ -241,8 +241,6 @@ def run_simulation(args):
                     # artefact_ids = available_artefacts[:, 0]
                     counts = recommender.get_frecency_counts(artefact_ids)
                     probabilities = counts / np.sum(counts)
-                    print(counts)
-                    print(probabilities)
 
             # -- FIELD SELECTION
 
@@ -254,7 +252,6 @@ def run_simulation(args):
             selected_artefacts = available_artefacts[choices]
 
             if args.interaction_mode == "frecency":
-                print(artefact_ids)
                 selected_ids.append(artefact_ids[choices])
 
             # make the choices one hot gaain
