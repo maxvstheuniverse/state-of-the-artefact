@@ -97,7 +97,7 @@ def run_simulation(args):
     # seed[np.random.choice(np.arange(len(seed)), size=args.n_artefacts, replace=False)]
 
     # returns the artefacts and their z_means
-    initial_artefacts = [agent.build(agent.sample('origin', 0.25, args.n_artefacts))
+    initial_artefacts = [agent.build(agent.sample(0.5, args.n_artefacts))
                          for agent in agents]
 
     for agent, (artefacts, z_means) in zip(agents, initial_artefacts):
@@ -138,11 +138,11 @@ def run_simulation(args):
             z_means = agent.learn(selected[i], args.budget)
 
             # sample n new artefacts
-            if args.sample_mode == "mean":
-                z = agent.sample(args.sample_mode, args.novelty_preference, 1, z_means)
+            if args.production_mode == "interpolate":
+                z = agent.interpolate(z_means)
 
-            if args.sample_mode == "origin":
-                z = agent.sample(args.sample_mode, args.novelty_preference, 1)
+            if args.production_mode == "origin":
+                z = agent.sample(args.novelty_preference)
 
             # calculate novelty values?
 
@@ -151,30 +151,6 @@ def run_simulation(args):
 
             # store
             new_entries.append(entry)
-
-            # tries = 10
-            # while tries > 0:
-            #     # sample
-            #     z = agent.sample(zs, args.sample_mode)
-
-            #     #  build, in one-hot encoding
-            #     artefact, z_mean = agent.build(z)
-
-            #     # check
-            #     duplicate = recommender.check_artefact(artefact)
-            #     if duplicate:
-            #         entry = make_entry(epoch, agent, artefact, z_mean)
-
-            #         # store
-            #         agent.generate_ball_tree()
-            #         new_entries.append(entry)
-            #         break
-            #     else:
-            #         tries -= 1
-
-            # if tries == 0:
-            #     # generate a random sample from the whole!
-            #     pass
 
         # -------------------------------------------------------------------------------------
         # -- DOMAIN
@@ -360,17 +336,18 @@ def main(args=None):
                         help="The number of rounds for the simulation. Default: 250")
     parser.add_argument("-a", "--agents", type=int, default=8, dest="n_agents",
                         help="The number of agents in the simulation. Default: 8")
-    parser.add_argument("-n", "--neighbours", type=int, default=2, dest="n_neighbours",
-                        help="The number of agents selected to be the field. Default: 2")
+    parser.add_argument("-n", "--neighbours", type=int, default=1, dest="n_neighbours",
+                        help="The number of agents selected to be the field. Default: 1")
     parser.add_argument("-s", "--artefacts", type=int, default=10, dest="n_artefacts",
                         help="The number of artefacts selected each round and the number of \
                               starting artefacts. Default: 10")
 
     # -- individual paramaters and modes
-    parser.add_argument("-sm", "--sample-mode", type=str, default="origin", dest="sample_mode",
+    parser.add_argument("-pm", "--production-mode", type=str, default="origin",
+                        dest="production_mode",
                         help="Sets the sample mode for the individual, use the origin, or the \
                               mean of current artefacts presented by the field. \
-                              Options: 'mean', 'origin'")
+                              Options: 'interpolate', 'origin'")
     parser.add_argument("-np", "--novelty-preference", type=float, default=0.25,
                         dest="novelty_preference",
                         help="Standard deviation used when sampling from the latent space. \
@@ -400,8 +377,9 @@ def main(args=None):
     # -----------------------------------------------------------------------------------------
     # -- SAVE
 
-    im, sm = args.interaction_mode, args.sample_mode
-    file_name = f"sim_a{args.n_agents}_e{args.n_epochs}_{im}_{sm}_{t}"
+    im, sm = args.interaction_mode, args.production_mode
+    np = args.novelty_preference
+    file_name = f"sim_a{args.n_agents}_e{args.n_epochs}_{im}_{sm}_np{np}_{t}"
 
     if args.save_remote:
         print("Uploading...", end=" ")

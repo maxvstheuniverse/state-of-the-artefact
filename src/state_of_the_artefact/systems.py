@@ -104,7 +104,7 @@ class Recommender(ConceptualSpace):
                 self.frecency.update({entry['id']: 10})
 
     def export(self):
-        return self.repository
+        return self.repository.copy()
 
 
 class Agent(ConceptualSpace):
@@ -114,14 +114,11 @@ class Agent(ConceptualSpace):
         self.id = agent_id
         self.fit(seed, epochs=500, batch_size=BATCH_SIZE, model_path=model_path)
 
-    def sample(self, sample_mode="mean", stddev=.25, n_artefacts=10, z_means=None, decode=False):
+    def interpolate(self, z_means):
+        return z_means.mean(axis=0, keepdims=True)
 
-        if sample_mode == "mean" and z_means is not None:
-            means = z_means.mean(axis=0, keepdims=True)
-            return np.random.normal(means, stddev, (n_artefacts, 32))
-
-        if sample_mode == "origin":
-            return np.random.normal(0.0, stddev, (n_artefacts, 32))
+    def sample(self, stddev=.25, n_artefacts=1):
+        return np.random.normal(0.0, stddev, (n_artefacts, 32))
 
     def build(self, z):
         """ Returns a reconstructed artefact for the given latent variables. """
