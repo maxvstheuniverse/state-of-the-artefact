@@ -76,8 +76,8 @@ def run_simulation(args):
         print(e.args)
         return 1
 
-    recommender = Recommender(domain_seed)
-    agents = [Agent(i, seed) for i, seed in enumerate(agent_seeds)]
+    recommender = Recommender(domain_seed, args.i_epochs)
+    agents = [Agent(i, seed, args.i_epochs) for i, seed in enumerate(agent_seeds)]
 
     # -- Other sim settings
 
@@ -137,13 +137,16 @@ def run_simulation(args):
             if args.production_mode == "origin":
                 z = agent.sample(args.novelty_preference, args.n_artefacts)
 
-            # calculate novelty values?
+                # calculate novelty values?
 
-            artefact, z_mean = agent.build(z)
-            entry = make_entry(epoch, agent, artefact[0], z_mean)
+            artefacts, _ = agent.build(z)
+            # entry = make_entry(epoch, agent, artefacts[0], z_mean)
+
+            agent_entries = [make_entry(epoch, agent, artefacts[0], 0)
+                             for artefact in artefacts]
 
             # store
-            new_entries.append(entry)
+            new_entries.append(agent_entries)
 
         # -------------------------------------------------------------------------------------
         # -- DOMAIN
@@ -260,7 +263,20 @@ def run_simulation(args):
     # -------------------------------------------------------------------------------------
     # -- FINALIZE
 
+    # -- export domain
     data["domain"] = pd.DataFrame(recommender.export())
+
+    # -- sample from agents
+    after_sample = []
+
+    for agent in agents:
+        z = np.random.normal(0.0, 0.5, size=(100, 32))  # just sampling 100 random samples for visualizing clusters.
+        artefacts = np.argmax(agent.rvae.decode(z, apply_onehot=False), axis=-1)
+        # print(artefacts)
+        after_sample.append([{agent.id: artefact} for artefact in artefacts])
+
+    data["after_sample"] = after_sample
+
     data["timings"] = pd.Series({"duration": elapsed,
                                  "start_time": time.strftime('%Y-%m-%dT%H-%M-%S',
                                                              time.localtime(start_time)),
@@ -376,9 +392,10 @@ def main(args=None):
     # -----------------------------------------------------------------------------------------
     # -- SAVE
 
-    im, sm = args.interaction_mode, args.production_mode
-    np = args.novelty_preference
-    file_name = f"sim_a{args.n_agents}_e{args.n_epochs}_{im}_{sm}_np{np}_{t}"
+    im, sm, np = args.interaction_mode, args.production_mode, args.novelty_preference,
+    b, s, r = args.budget, args.n_select, args.n_artefacts
+
+    file_name = f"sim_a{args.n_agents}_e{args.n_epochs}_{im}_{sm}_np{np}_b{b}_sr{s}-{r}_{t}"
 
     if args.save_remote:
         print("Uploading...", end=" ")

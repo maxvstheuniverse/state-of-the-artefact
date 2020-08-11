@@ -16,9 +16,9 @@ class Recommender(ConceptualSpace):
     """ The Recommender is static system non-learning Conceptual Space used
         for making predictions about individual positions
     """
-    def __init__(self, seed, args=None, model_path=None):
+    def __init__(self, seed, args=None, init_epochs=500, model_path=None):
         super().__init__(TIMESTEPS, DIMENSIONS)
-        self.name = "recommender"
+        self.name = f"recommender_{init_epochs}"
         self.seed = seed
         self.tree = None
         self.frecency = {}
@@ -55,14 +55,19 @@ class Recommender(ConceptualSpace):
             return kde_density(x, self.tree)
 
     def find_positions(self, entries, save_entries=True, frecency=False):
-        artefacts = np.array([entry["artefact"] for entry in entries])
-        x = reverse_sequences(one_hot(artefacts))
-        zs = self.rvae.encode(x)
+        positions = []
 
-        if save_entries:
-            self.save(entries, zs, frecency=frecency)
+        for agent_entries in entries:
+            artefacts = np.array([entry["artefact"] for entry in agent_entries])
+            x = reverse_sequences(one_hot(artefacts))
+            zs = self.rvae.encode(x)
 
-        return zs[0].numpy()
+            if save_entries:
+                self.save(agent_entries, zs, frecency=frecency)
+
+            positions.append(np.mean(zs[0], axis=0))
+
+        return np.array(positions)
 
     def select_artefacts(self, agent_id, with_ids=False):
         """ NOTE: Artefacts not in one-hot encoding. """
@@ -120,9 +125,9 @@ class Agent(ConceptualSpace):
     def sample(self, stddev=.25, n_artefacts=1):
         return np.random.normal(0.0, stddev, (n_artefacts, 32))
 
-    def build(self, z):
+    def build(self, z, apply_onehot=True):
         """ Returns a reconstructed artefact for the given latent variables. """
-        artefacts = self.rvae.decode(z, apply_onehot=True)
+        artefacts = self.rvae.decode(z, apply_onehot=apply_onehot)
         z_means, _, _ = self.rvae.encode(artefacts)
         return artefacts, z_means.numpy()
 
@@ -137,7 +142,7 @@ class Agent(ConceptualSpace):
         x_reverse = reverse_sequences(x)
         evaluation = self.rvae.evaluate(x_reverse, x, verbose=0, batch_size=1, return_dict=True)
 
-        _, _, z = self.rvae.encode(x)
+        _, _, z = self.rvae.encode(x_reverse)
         reconstructions = self.rvae.decode(z)
 
         correct = 0
