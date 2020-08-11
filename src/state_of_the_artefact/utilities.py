@@ -124,9 +124,12 @@ def nn_density(x, tree, r=.1, apply_mean=False):
     return density
 
 
-def kde_density(x, tree, apply_mean=False):
+def kde_density(x, tree=None, apply_mean=False):
+    if tree is None:
+        tree = BallTree(x)
+
     data = tree.get_arrays()[0]
-    h = np.std(data) * (4 / 3 / len(data)) ** (1 / 5)  # Silverman's Rule of Thumb
+    h = np.std(data) * (4 / 3 / len(data)) ** (1 / 5)   # Silverman's Rule of Thumb
     density = tree.kernel_density(x, h)
 
     if apply_mean:

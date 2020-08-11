@@ -108,11 +108,11 @@ class Recommender(ConceptualSpace):
 
 
 class Agent(ConceptualSpace):
-    def __init__(self, agent_id, seed, model_path=None, **kwargs):
+    def __init__(self, agent_id, seed, init_epochs=500, model_path=None, **kwargs):
         super().__init__(TIMESTEPS, DIMENSIONS)
         self.name = f"agent_{agent_id}"
         self.id = agent_id
-        self.fit(seed, epochs=500, batch_size=BATCH_SIZE, model_path=model_path)
+        self.fit(seed, epochs=init_epochs, batch_size=BATCH_SIZE, model_path=model_path)
 
     def interpolate(self, z_means):
         return z_means.mean(axis=0, keepdims=True)

@@ -42,23 +42,26 @@ class ConceptualSpace():
     def learn(self, artefacts, budget=100):
         """ Trains the individual to understand the presented artefacts. """
         num_artefacts = len(artefacts)
+        batch_size = num_artefacts if num_artefacts < 32 else 32
+
         x = reverse_sequences(artefacts)
+        self.rvae.fit(x, artefacts, epochs=budget, batch_size=batch_size, verbose=0)
 
-        correct = 0
-        while correct < num_artefacts and budget > 0:
-            correct = 0
-            self.rvae.fit(x, artefacts, epochs=1, batch_size=num_artefacts, verbose=0)
-            _, _, z = self.rvae.encode(x)
-            reconstructions = self.rvae.decode(z).numpy()
+        # correct = 0
+        # while correct < num_artefacts and budget > 0:
+        #     correct = 0
 
-            for artefact, reconstruction in zip(artefacts, reconstructions):
-                a = np.argmax(artefact, axis=1)
-                b = np.argmax(reconstruction, axis=1)
+        #     _, _, z = self.rvae.encode(x)
+        #     reconstructions = self.rvae.decode(z).numpy()
 
-                if np.array_equiv(a, b):
-                    correct += 1
+        #     for artefact, reconstruction in zip(artefacts, reconstructions):
+        #         a = np.argmax(artefact, axis=1)
+        #         b = np.argmax(reconstruction, axis=1)
 
-            budget -= 1
+        #         if np.array_equiv(a, b):
+        #             correct += 1
+
+        #     budget -= 1
 
         z_mean, _, _ = self.rvae.encode(x)
         return z_mean.numpy()
