@@ -76,8 +76,8 @@ def run_simulation(args):
         print(e.args)
         return 1
 
-    recommender = Recommender(domain_seed, args.i_epochs)
-    agents = [Agent(i, seed, args.i_epochs) for i, seed in enumerate(agent_seeds)]
+    recommender = Recommender(domain_seed, init_epochs=args.i_epochs)
+    agents = [Agent(i, seed, init_epochs=args.i_epochs) for i, seed in enumerate(agent_seeds)]
 
     # -- Other sim settings
 

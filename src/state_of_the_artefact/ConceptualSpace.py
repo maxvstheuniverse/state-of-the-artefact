@@ -29,7 +29,7 @@ class ConceptualSpace():
         model_path = os.path.join(model_path, f"{self.name}_{epochs}.h5")
 
         if os.path.exists(model_path):
-            print(f"Loading weights for {self.name}...", end=" ")
+            print(f"Loading weights for {self.name}_{epochs}...", end=" ")
             self.rvae.load_weights(model_path)
             print("Done.")
         else:
