@@ -209,7 +209,7 @@ def run_simulation(args):
                 # if based on frecency, the populations doesn't linger on the past.
                 # it favors recent and frequent creations.
 
-                if frecency_mod:
+                if frecency_mode:
                     # artefact_ids = available_artefacts[:, 0]
                     counts = recommender.get_frecency_counts(artefact_ids)
                     probabilities = counts / np.sum(counts)
@@ -270,9 +270,8 @@ def run_simulation(args):
     after_sample = []
 
     for agent in agents:
-        z = np.random.normal(0.0, 0.5, size=(100, 32))  # just sampling 100 random samples for visualizing clusters.
+        z = np.random.normal(0.0, 0.5, size=(100, 32))
         artefacts = np.argmax(agent.rvae.decode(z, apply_onehot=False), axis=-1)
-        # print(artefacts)
         after_sample.append([{agent.id: artefact} for artefact in artefacts])
 
     data["after_sample"] = after_sample
