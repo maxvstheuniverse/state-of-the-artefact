@@ -270,11 +270,11 @@ def run_simulation(args):
     after_sample = []
 
     for agent in agents:
-        z = np.random.normal(0.0, 0.5, size=(100, 32))
+        z = np.random.normal(0.0, 0.25, size=(200, 32))
         artefacts = np.argmax(agent.rvae.decode(z, apply_onehot=False), axis=-1)
-        after_sample.append([{agent.id: artefact} for artefact in artefacts])
+        after_sample.append([(agent.id, artefact) for artefact in artefacts])
 
-    data["after_sample"] = after_sample
+    data["after_sample"] = [{k: v for k, v in row} for row in zip(*after_sample)]
 
     data["timings"] = pd.Series({"duration": elapsed,
                                  "start_time": time.strftime('%Y-%m-%dT%H-%M-%S',
